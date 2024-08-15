@@ -2,10 +2,6 @@
 title: "IS415-GAA"
 ---
 
-This is a Quarto website.
+Javier's IS415-GAA Website
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
-
-```{r}
-1 + 1
-```
+Welcome to IS415 Geospatial Analytics and Applications. In this website, you will find my coursework and learning journey prepared for this course.
