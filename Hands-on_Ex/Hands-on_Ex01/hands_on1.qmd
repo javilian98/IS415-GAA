@@ -419,7 +419,7 @@ labs(
 
 The solution:
 
-```{r}
+```{r setup, warning=FALSE}
 ggplot(
   data = mpsz3414,
   aes(
