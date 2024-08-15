@@ -5,9 +5,10 @@ website:
   title: "IS415-GAA"
   navbar:
     left:
-      - href: index.qmd
-        text: Home
-      - about.qmd
+    - text: "Hands-on Exercises"
+      menu:
+        - text: "Hands-on Exercises 1"
+          href: "Hands-on_Ex/Hands-on_Ex01/hands_on1.html"
 
 format:
   html:
