@@ -70,7 +70,6 @@ The task will be performed by using read_csv() function of readr package as show
 
 ```{r}
 popdata <- read_csv("data/aspatial/respopagesextod2011to2020.csv")
-popdata
 ```
 
 ### 2.3.4 Data Preparation
@@ -108,8 +107,6 @@ popdata2020 <- popdata %>%
   mutate(`TOTAL` = rowSums(.[3:21])) %>%
   mutate(`DEPENDENCY` = (`YOUNG` + `AGED`) / `ECONOMY ACTIVE`) %>%
   select(`PA`, `SZ`, `YOUNG`, `ECONOMY ACTIVE`, `AGED`, `TOTAL`, `DEPENDENCY`)
-
-popdata2020
 ```
 
 #### 2.3.4.2 Joining the attribute data and geospatial data
