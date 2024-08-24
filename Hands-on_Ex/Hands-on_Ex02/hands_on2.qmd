@@ -395,7 +395,7 @@ tm_shape(mpsz_pop2020) +
     "DEPENDENCY",
     n = 6,
     style = "quantile",
-    palette = "Blues"
+    palette = "Greens"
   ) +
   tm_borders(alpha = 0.5)
 ```
@@ -589,7 +589,7 @@ tmap_arrange(youngmap, agedmap, asp=1, ncol=2)
 Instead of creating small multiple choropleth map, you can also use selection function to map spatial objects meeting the selection criterion.
 
 ```{r}
-tm_shape(mpsz_pop2020[mpsz_pop2020$REGION_N == "EAST REGION", ]) +
+tm_shape(mpsz_pop2020[mpsz_pop2020$REGION_N == "CENTRAL REGION", ]) +
   tm_fill(
     "DEPENDENCY", 
     style = "quantile", 
