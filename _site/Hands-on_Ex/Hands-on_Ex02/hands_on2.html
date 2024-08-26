@@ -361,7 +361,7 @@ dbl (2): Pop, Time
 <span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="st">`</span><span class="at">POP</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">sum</span>(<span class="st">`</span><span class="at">Pop</span><span class="st">`</span>)) <span class="sc">%&gt;%</span></span>
 <span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
 <span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> AG, <span class="at">values_from =</span> POP) <span class="sc">%&gt;%</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">YOUNG =</span> <span class="fu">rowSums</span>(.[<span class="dv">3</span><span class="sc">:</span><span class="dv">6</span>])) <span class="sc">%&gt;%</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">YOUNG =</span> <span class="fu">rowSums</span>(.[<span class="dv">3</span><span class="sc">:</span><span class="dv">6</span>]) <span class="sc">+</span> <span class="fu">rowSums</span>(.[<span class="dv">14</span>])) <span class="sc">%&gt;%</span></span>
 <span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="st">`</span><span class="at">ECONOMY ACTIVE</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">rowSums</span>(.[<span class="dv">7</span><span class="sc">:</span><span class="dv">13</span>]) <span class="sc">+</span> <span class="fu">rowSums</span>(.[<span class="dv">15</span>])) <span class="sc">%&gt;%</span></span>
 <span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="st">`</span><span class="at">AGED</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">rowSums</span>(.[<span class="dv">16</span><span class="sc">:</span><span class="dv">21</span>])) <span class="sc">%&gt;%</span></span>
 <span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="st">`</span><span class="at">TOTAL</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">rowSums</span>(.[<span class="dv">3</span><span class="sc">:</span><span class="dv">21</span>])) <span class="sc">%&gt;%</span></span>
@@ -424,25 +424,25 @@ First 10 features:
 10         QT CENTRAL REGION       CR 3580D2AFFBEE914C 2014-12-05 24168.31
      Y_ADDR SHAPE_Leng SHAPE_Area              PA YOUNG ECONOMY ACTIVE AGED
 1  29220.19   5267.381  1630379.3            &lt;NA&gt;    NA             NA   NA
-2  29782.05   3506.107   559816.2          OUTRAM   760           3130 2120
+2  29782.05   3506.107   559816.2          OUTRAM   930           3130 2120
 3  29974.66   1740.926   160807.5 SINGAPORE RIVER     0             40   10
-4  29933.77   3313.625   595428.9     BUKIT MERAH  2150           7450 3320
-5  30005.70   2825.594   387429.4     BUKIT MERAH  2120           6160 1740
-6  29991.38   4428.913  1030378.8     BUKIT MERAH  2380           7340 3420
-7  30230.86   3275.312   551732.0     BUKIT MERAH  2170           8080 3610
+4  29933.77   3313.625   595428.9     BUKIT MERAH  2600           7450 3320
+5  30005.70   2825.594   387429.4     BUKIT MERAH  2760           6160 1740
+6  29991.38   4428.913  1030378.8     BUKIT MERAH  2800           7340 3420
+7  30230.86   3275.312   551732.0     BUKIT MERAH  2750           8080 3610
 8  30222.86   2208.619   290184.7 SINGAPORE RIVER     0             50   10
-9  29893.78   6571.323  1084792.3      QUEENSTOWN   940           2770  610
+9  29893.78   6571.323  1084792.3      QUEENSTOWN  1120           2770  610
 10 30104.18   3454.239   631644.3      QUEENSTOWN    30            160   60
    TOTAL DEPENDENCY                       geometry
 1     NA         NA MULTIPOLYGON (((31495.56 30...
-2   6180  0.9201278 MULTIPOLYGON (((29092.28 30...
+2   6180  0.9744409 MULTIPOLYGON (((29092.28 30...
 3     50  0.2500000 MULTIPOLYGON (((29932.33 29...
-4  13370  0.7342282 MULTIPOLYGON (((27131.28 30...
-5  10660  0.6266234 MULTIPOLYGON (((26451.03 30...
-6  13560  0.7901907 MULTIPOLYGON (((25899.7 297...
-7  14440  0.7153465 MULTIPOLYGON (((27746.95 30...
+4  13370  0.7946309 MULTIPOLYGON (((27131.28 30...
+5  10660  0.7305195 MULTIPOLYGON (((26451.03 30...
+6  13560  0.8474114 MULTIPOLYGON (((25899.7 297...
+7  14440  0.7871287 MULTIPOLYGON (((27746.95 30...
 8     60  0.2000000 MULTIPOLYGON (((29351.26 29...
-9   4500  0.5595668 MULTIPOLYGON (((20996.49 30...
+9   4500  0.6245487 MULTIPOLYGON (((20996.49 30...
 10   250  0.5625000 MULTIPOLYGON (((24472.11 29...</code></pre>
 </div>
 </div>
@@ -741,7 +741,7 @@ First 10 features:
 <div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(mpsz_pop2020<span class="sc">$</span>DEPENDENCY)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
- 0.0000  0.5661  0.6179  0.6942  0.6941 19.0000      92 </code></pre>
+ 0.0000  0.6519  0.7025  0.7742  0.7645 19.0000      92 </code></pre>
 </div>
 </div>
 <p>With reference to the results above, we set break point at 0.60, 0.70, 0.80, and 0.90. In addition, we also need to include a minimum and maximum, which we set at 0 and 100. Our breaks vector is thus c(0, 0.60, 0.70, 0.80, 0.90, 19.00)</p>

@@ -75,3 +75,43 @@ mpsz19_kml <- st_read(
 )
 ```
 :::
+
+::: panel-tabset
+### Import MPSZ-19 Shape
+```{r}
+mpsz19_shp <- st_read(
+  dsn = "data/geospatial",
+  layer = "MPSZ-2019"
+) %>%
+  st_transform(crs = 3414)
+```
+:::
+
+## Working with Population Data
+::: panel-tabset
+### Task
+1. Read the csv data into a variable popdata
+### Code
+```{r}
+popdata <- read_csv("data/aspatial/respopagesextod2023.csv")
+```
+:::
+
+## Data Wrangling
+::: panel-tabset
+
+### Task
+1. Write a code chunk to prpare a data frame showing population by Planning Area and Planning Subzone.
+
+### Code
+```{r}
+popdata2023 <- popdata %>%
+  group_by(PA, SZ, AG) %>%
+  summarise(`POP` = sum(`Pop`)) %>%
+  ungroup() %>%
+  pivot_wider(
+    names_from = AG,
+    values_from = POP
+  )
+```
+:::
