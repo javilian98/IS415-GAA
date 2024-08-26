@@ -14,8 +14,10 @@ website:
           
     - text: "In-class Exercises"
       menu:
-        - text: "In-class Exercises 1"
+        - text: "In-class Exercise 1"
           href: "In-class_Ex/ICE_01/ice_01.html"
+        - text: "In-class Exercise 2"
+          href: "In-class_Ex/ICE_02/ice_02.html"
 
 format:
   html:

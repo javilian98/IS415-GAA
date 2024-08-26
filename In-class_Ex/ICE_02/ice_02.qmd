@@ -1,0 +1,77 @@
+---
+title: "In-class Exercise 2"
+author: "Javier Lian"
+---
+## Working with Master Plan 2019 Subzone Boundary Data
+
+::: panel-tabset
+### Tasks
+
+1.  Create a sub folder called data in In-class_Ex02 folder
+
+2.  If necessary visit data.gov.sg and download "Master Plan 2024 Subzone Boundary (web)" from the portal. You are required to download the ESRI shapefile and kml file.
+
+3.  Type the code chunk to import the "Master Plan 2024 Subzone Boundary (web)" shapefile and kml file, save them in sf simple features data frame.
+
+### Code
+
+::: \[style = "fontsize: 1.5em"\]
+
+```{r}
+pacman::p_load(sf, tidyverse)
+```
+
+This code chunk imports shape file.
+
+```{r}
+mpsz14_shp <- st_read(
+  dsn = "data/geospatial",
+  layer = "MP14_SUBZONE_WEB_PL"
+)
+```
+
+This code chunk imports kml file (error).
+
+```{r}
+class(mpsz14_shp)
+#| eval: false
+mpsz14_kml <- st_read("data/aspatial/MasterPlan2014SubzoneBoundaryWebKML.kml")
+```
+## Method for Resolving MasterPlan2014 kml File Error
+```{r}
+st_write(
+  mpsz14_shp,
+  "data/aspatial/MasterPlan2014SubzoneBoundaryWebKML.kml",
+  delete_dsn = TRUE
+)
+```
+:::
+
+## Working with Master Plan 2019 Subzone Boundary Data
+
+::: panel-tabset
+### Task
+
+1.  Visit data.gov.sg and download Master Plan 2019 Subzone Boundary (No Sea) from the portal. You are required to download both kml files.
+
+2.  Move MPSZ-2019 shapefile provided for In-Class Exercise 1 folder on elearn to data sub-folder of In-Class_Ex02.
+
+3.  Write a code chunk to import Master Plan 2019 Subzone Boundary (No Sea) kml and MPSZ-2019 into sf simple feature data.frame.
+
+### Import Shapefile
+
+```{r}
+mpsz19_shp <- st_read(
+  dsn = "data/geospatial",
+  layer = "MP14_SUBZONE_WEB_PL"
+)
+```
+
+### Import kml
+
+```{r}
+mpsz19_kml <- st_read(
+  "data/aspatial/MasterPlan2019SubzoneBoundaryNoSeaKML.kml"
+)
+```
+:::
