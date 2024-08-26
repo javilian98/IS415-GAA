@@ -172,6 +172,13 @@
     "href": "In-class_Ex/ICE_02/ice_02.html#data-wrangling",
     "title": "In-class Exercise 2",
     "section": "Data Wrangling",
-    "text": "Data Wrangling\n\nTaskCode\n\n\n\nWrite a code chunk to prpare a data frame showing population by Planning Area and Planning Subzone.\n\n\n\n\npopdata2023 &lt;- popdata %&gt;%\n  group_by(PA, SZ, AG) %&gt;%\n  summarise(`POP` = sum(`Pop`)) %&gt;%\n  ungroup() %&gt;%\n  pivot_wider(\n    names_from = AG,\n    values_from = POP\n  )\n\n`summarise()` has grouped output by 'PA', 'SZ'. You can override using the\n`.groups` argument."
+    "text": "Data Wrangling\n\nTaskCode\n\n\n\nWrite a code chunk to prpare a data frame showing population by Planning Area and Planning Subzone.\n\n\n\n\npopdata2023 &lt;- popdata %&gt;%\n  group_by(PA, SZ, AG) %&gt;%\n  summarise(`POP` = sum(`Pop`)) %&gt;%\n  ungroup() %&gt;%\n  pivot_wider(\n    names_from = AG,\n    values_from = POP\n  )\n\n`summarise()` has grouped output by 'PA', 'SZ'. You can override using the\n`.groups` argument.\n\ncolnames(popdata2023)\n\n [1] \"PA\"          \"SZ\"          \"0_to_4\"      \"10_to_14\"    \"15_to_19\"   \n [6] \"20_to_24\"    \"25_to_29\"    \"30_to_34\"    \"35_to_39\"    \"40_to_44\"   \n[11] \"45_to_49\"    \"50_to_54\"    \"55_to_59\"    \"5_to_9\"      \"60_to_64\"   \n[16] \"65_to_69\"    \"70_to_74\"    \"75_to_79\"    \"80_to_84\"    \"85_to_89\"   \n[21] \"90_and_Over\""
+  },
+  {
+    "objectID": "In-class_Ex/ICE_02/ice_02.html#joining-popdata2023-and-mpsz19_shp",
+    "href": "In-class_Ex/ICE_02/ice_02.html#joining-popdata2023-and-mpsz19_shp",
+    "title": "In-class Exercise 2",
+    "section": "Joining popdata2023 and mpsz19_shp",
+    "text": "Joining popdata2023 and mpsz19_shp\n\npopdata2023 &lt;- popdata2023 %&gt;%\n  mutate_at(\n    .vars = vars(PA, SZ), \n    .funs = list(toupper) \n  )\n\n\npop2023_mpsz &lt;- left_join(popdata2023, mpsz19_shp, by = c(\"SZ\" = \"SUBZONE_N\"))"
   }
 ]

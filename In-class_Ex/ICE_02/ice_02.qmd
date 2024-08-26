@@ -113,5 +113,20 @@ popdata2023 <- popdata %>%
     names_from = AG,
     values_from = POP
   )
+
+colnames(popdata2023)
 ```
 :::
+
+## Joining popdata2023 and mpsz19_shp
+```{r}
+popdata2023 <- popdata2023 %>%
+  mutate_at(
+    .vars = vars(PA, SZ), 
+    .funs = list(toupper) 
+  )
+```
+
+```{r}
+pop2023_mpsz <- left_join(popdata2023, mpsz19_shp, by = c("SZ" = "SUBZONE_N"))
+```
