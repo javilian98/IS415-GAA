@@ -1,7 +1,10 @@
 ---
 title: "In-class Exercise 2"
 author: "Javier Lian"
+execute:
+    freeze: true
 ---
+
 ## Working with Master Plan 2019 Subzone Boundary Data
 
 ::: panel-tabset
@@ -37,7 +40,9 @@ class(mpsz14_shp)
 #| eval: false
 mpsz14_kml <- st_read("data/aspatial/MasterPlan2014SubzoneBoundaryWebKML.kml")
 ```
+
 ## Method for Resolving MasterPlan2014 kml File Error
+
 ```{r}
 st_write(
   mpsz14_shp,
@@ -78,6 +83,7 @@ mpsz19_kml <- st_read(
 
 ::: panel-tabset
 ### Import MPSZ-19 Shape
+
 ```{r}
 mpsz19_shp <- st_read(
   dsn = "data/geospatial",
@@ -88,22 +94,26 @@ mpsz19_shp <- st_read(
 :::
 
 ## Working with Population Data
+
 ::: panel-tabset
 ### Task
-1. Read the csv data into a variable popdata
-### Code
+
+1.  Read the csv data into a variable popdata \### Code
+
 ```{r}
 popdata <- read_csv("data/aspatial/respopagesextod2023.csv")
 ```
 :::
 
 ## Data Wrangling
-::: panel-tabset
 
+::: panel-tabset
 ### Task
-1. Write a code chunk to prpare a data frame showing population by Planning Area and Planning Subzone.
+
+1.  Write a code chunk to prpare a data frame showing population by Planning Area and Planning Subzone.
 
 ### Code
+
 ```{r}
 popdata2023 <- popdata %>%
   group_by(PA, SZ, AG) %>%
@@ -119,6 +129,7 @@ colnames(popdata2023)
 :::
 
 ## Joining popdata2023 and mpsz19_shp
+
 ```{r}
 popdata2023 <- popdata2023 %>%
   mutate_at(
