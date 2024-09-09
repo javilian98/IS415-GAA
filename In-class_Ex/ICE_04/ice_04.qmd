@@ -1,0 +1,169 @@
+---
+title: "In-class Exercise 4"
+author: "Javier Lian"
+---
+
+## Installing and Loading the R Packages
+
+```{r}
+pacman::p_load(sf, raster, spatstat, sparr, tmap, tidyverse)
+```
+
+## Importing and Preparing Study Area
+
+Importing study area
+
+```{r}
+#| eval: false
+kbb <- st_read(
+  dsn = 'data/rawdata',
+  layer = "Kepulauan_Bangka_Belitung"
+) %>%
+  st_transform(crs = 32748)
+```
+
+```{r}
+kbb_sf <- st_read(
+  dsn = 'data/rawdata',
+  layer = "Kepulauan_Bangka_Belitung"
+) %>%
+  st_union() %>%
+  st_zm(drop = TRUE, what = "ZM") %>%
+  st_transform(crs = 32748)
+```
+
+### Converting OWIN
+
+```{r}
+kbb_owin <- as.owin(kbb_sf)
+kbb_owin
+```
+
+```{r}
+class(kbb_owin)
+```
+
+## Importing and Preparing Forest Fire data
+
+```{r}
+fire <- read_csv("data/rawdata/forestfires.csv")
+```
+
+Revised code chunk to convert tibble dataframe into sf dataframe.
+
+Removes longitude and latitude columns and insert a new column Geometry (lon, lat)
+
+```{r}
+fire_sf <- read_csv("data/rawdata/forestfires.csv") %>%
+  st_as_sf(
+    coords = c("longitude", "latitude"),
+    crs = 4326
+  ) %>%
+  st_transform(crs = 32748)
+```
+
+```{r}
+fire_sf <- fire_sf %>%
+  mutate(DayOfYear = yday(acq_date)) %>%
+  mutate(Month_num = month(acq_date)) %>%
+  mutate(Month_fac = month(acq_date, label = TRUE, abbr = FALSE))
+```
+
+## Visualising the Fire Points
+
+Overall plot
+
+```{r}
+tm_shape(kbb_sf) +
+  tm_polygons() +
+  tm_shape(fire_sf) +
+  tm_dots()
+```
+
+Visualising by months
+
+```{r}
+tm_shape(kbb_sf) +
+  tm_polygons() +
+  tm_shape(fire_sf) +
+  tm_dots(size = 0.1) +
+  tm_facets(
+    by = "Month_fac",
+    free.coords = FALSE, #prevent zooming to coords, show the entire map
+    drop.units = TRUE
+  )
+```
+
+## Extracting forest fires by Month
+
+```{r}
+fire_month <- fire_sf %>%
+  select(Month_num)
+```
+
+## Creating ppp
+
+```{r}
+fire_month_ppp <- as.ppp(fire_month)
+fire_month_ppp
+```
+
+Check the output is in the correct object class
+
+```{r}
+summary(fire_month_ppp)
+```
+
+Check for duplicates
+
+```{r}
+any(duplicated(fire_month_ppp))
+```
+
+Including Owin object
+
+```{r}
+fire_month_owin <- fire_month_ppp[kbb_owin]
+summary(fire_month_owin)
+```
+
+```{r}
+plot(fire_month_owin)
+```
+
+Computing Spatio-temporal KDE
+
+```{r}
+st_kde <- spattemp.density(fire_month_owin)
+summary(st_kde)
+
+# h = 15102.45 tells us the distance in meters
+# lambda 0.0304 tells us the month
+```
+
+Plotting the spatio-temporal KDE object
+
+```{r}
+#| fig-width = 12
+#| fig-height = 10
+trims <- c(7, 8, 9, 10, 11, 12)
+par(mfcol = c(2, 3))
+
+for (i in trims) {
+  plot(st_kde, i,
+       override.par = FALSE,
+       fix.range = TRUE,
+       main = paste("KDE at month", i))
+}
+```
+
+Plotting in year
+
+```{r}
+fire_yday <- fire_sf %>%
+  select(DayOfYear)
+fire_yday_ppp <- as.ppp(fire_yday)
+fire_yday_owin <- fire_yday_ppp[kbb_owin]
+kde_yday <- spattemp.density(fire_yday_owin)
+summary(kde_yday)
+```
