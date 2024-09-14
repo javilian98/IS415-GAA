@@ -1,6 +1,8 @@
 ---
 title: "In-class Exercise 3"
 author: "Javier Lian"
+execute: 
+  freeze: true
 ---
 
 ## Issue 1: Installing maptools
@@ -10,7 +12,7 @@ maptools is retired and binary is removed from CRAN. However, we can download fr
 ```{r}
 # After the installation is completed, it is important to edit the code chunk as shown below in order to avoid maptools being download and install repetitively every time the Quarto document been rendered.
 #| eval: false
-install.packages("maptools", repos = "https://packagemanager.posit.co/cran/2023-10-13")
+#install.packages("maptools", repos = "https://packagemanager.posit.co/cran/2023-10-13")
 ```
 
 ```{r}
@@ -20,16 +22,17 @@ pacman::p_load(sf, raster, spatstat, tmap, tidyverse)
 ## Import Data File
 
 ```{r}
-acled_sf <- readr::read_csv("data/Myanmar/ACLED_Myanmar.csv") %>%
-  st_as_sf(coords = c( "longitude","latitude"), crs = 4326) %>%
-  st_transform(crs = 32647) %>%
-    mutate(event_date = dmy(event_date))
+#acled_sf <- readr::read_csv("data/Myanmar/ACLED_Myanmar.csv") %>%
+#  st_as_sf(coords = c( "longitude","latitude"), crs = 4326) %>%
+#  st_transform(crs = 32647) %>%
+#    mutate(event_date = dmy(event_date))
 ```
 
 ```{r}
-tmap_mode("view")
-acled_sf %>% filter(year == 2023 |
-                      event_type == 'Political Violence') %>%
-  tm_shape() + tm_dots()
-tmap_mode("plot")
+
+#tmap_mode("view")
+#acled_sf %>% filter(year == 2023 |
+#                      event_type == 'Political Violence') %>%
+#  tm_shape() + tm_dots()
+#tmap_mode("plot")
 ```
