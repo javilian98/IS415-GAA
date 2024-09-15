@@ -382,6 +382,8 @@ nb1
 
 Question: Can you see the meaning of Spatial lag with row-standardized weights now?
 
+> My answer: It displays the average impact of neighbouring values on a region, with each neighbour’s values adjusted to reflect the total influence relative to the number of neighbours.
+
 We can append the spatially lag GDPPC values onto hunan sf data frame by using the code chunk below.
 
 ```{r}
@@ -434,6 +436,8 @@ lag_sum
 ```
 
 Question: Can you understand the meaning of Spatial lag as a sum of neighboring values now?
+
+> My answer: It is to measure how a value of a location changes at neighbouring locations.
 
 Next, we will append the *lag_sum GDPPC* field into `hunan` sf data frame by using the code chunk below.
 

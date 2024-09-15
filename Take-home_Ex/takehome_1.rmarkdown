@@ -1,0 +1,625 @@
+---
+title: "Take-home Exercise 1"
+author: "Javier Lian"
+execute: 
+  freeze: true
+---
+
+
+## Introduction
+
+Millions of people have their lives shattered by armed conflict – wars – every year.
+
+Armed conflict has been on the rise since about 2012, after a decline in the 1990s and early 2000s. First came conflicts in Libya, Syria and Yemen, triggered by the 2011 Arab uprisings. Libya’s instability spilled south, helping set off a protracted crisis in the Sahel region. A fresh wave of major combat followed: the 2020 Azerbaijani-Armenian war over the Nagorno-Karabakh enclave, horrific fighting in Ethiopia’s northern Tigray region that began weeks later, the conflict prompted by the Myanmar army’s 2021 power grab and Russia’s 2022 assault on Ukraine. Add to those 2023’s devastation in Sudan and Gaza. Around the globe, more people are dying in fighting, being forced from their homes or in need of life-saving aid than in decades.
+
+## The Objectives
+
+-   Gain a better insight of the safety of civilians in Myanmar by knowing which hour of the day is dangerous to be outside
+
+## **The Data**
+
+### **Armed conflict data**
+
+For the purpose of this assignment, armed conflict data of Myanmar between 2021-2024 from [Armed Conflict Location & Event Data (ACLED)](https://acleddata.com/), an independent, impartial, international non-profit organization collecting data on violent conflict and protest in all countries and territories in the world, should be used.
+
+In terms of event types, students should focus on at least four main event types, namely: Battles, Explosion/Remote violence, Strategic developments, and Violence against civilians.
+
+In terms of study period, students should focus on quarterly armed conflict events from January 2021 until June 2024.
+
+### **GIS Data**
+
+-   [Geospatial data](http://geonode.themimu.info/layers/?limit=100&offset=0) on [Myanmar Information Management Unit, MIMU](http://www.themimu.info/)
+
+## **Installing and Loading the R packages**
+
+In this hands-on exercise, five R packages will be used, they are:
+
+-   [**sf**](https://r-spatial.github.io/sf/), a relatively new R package specially designed to import, manage and process vector-based geospatial data in R.
+
+-   [**spatstat**](https://spatstat.org/), which has a wide range of useful functions for point pattern analysis. In this hands-on exercise, it will be used to perform 1st- and 2nd-order spatial point patterns analysis and derive kernel density estimation (KDE) layer.
+
+-   [**raster**](https://cran.r-project.org/web/packages/raster/) which reads, writes, manipulates, analyses and model of gridded spatial data (i.e. raster). In this hands-on exercise, it will be used to convert image output generate by spatstat into raster format.
+
+-   [**maptools**](https://cran.r-project.org/web/packages/maptools/index.html) which provides a set of tools for manipulating geographic data. In this hands-on exercise, we mainly use it to convert *Spatial* objects into *ppp* format of **spatstat**.
+
+-   [**tmap**](https://cran.r-project.org/web/packages/tmap/index.html) which provides functions for plotting cartographic quality static point patterns maps or interactive maps by using [leaflet](https://leafletjs.com/) API.
+
+Use the code chunk below to install and launch the five R packages.
+
+
+```{r}
+pacman::p_load(sf, raster, spatstat, tmap, tidyverse)
+```
+
+
+## Importing Spatial Data File
+
+
+```{r}
+acled_sf <- readr::read_csv("data/aspatial/ACLED_Myanmar.csv")
+```
+
+
+## Importing Geospatial Data Files
+
+
+```{r}
+mpsz_adm1_sf <- st_read(
+  dsn = "data/geospatial/admin1",
+  layer = "mmr_polbnda_adm1_250k_mimu_1"
+) %>%
+  st_transform(crs = 32647)
+```
+
+
+## Geospatial Data wrangling
+
+### Inspecting columns
+
+
+```{r}
+colnames(acled_sf)
+ncol(acled_sf)
+```
+
+
+### Dropping unused columns
+
+
+```{r}
+acled_sf <- acled_sf %>%
+  select(-iso, -region, -country, -notes, -time_precision)
+```
+
+
+Inspecting columns again
+
+
+```{r}
+colnames(acled_sf)
+ncol(acled_sf)
+```
+
+
+### Converting timezone to Yangon, Myanmar
+
+
+```{r}
+acled_sf$timestamp <- as_datetime(acled_sf$timestamp, tz = "Asia/Yangon")
+```
+
+
+Extract the Hour, Minutes and Seconds into their new respective columns from the timestamp column to be used later.
+
+
+```{r}
+acled_sf <- acled_sf %>%
+  mutate(
+    Hour = hour(timestamp),
+    Minutes = minute(timestamp),
+    Seconds = second(timestamp)
+  )
+```
+
+
+Now we are going to convert the longitude and latitude to CRS system of Myanmar
+
+
+```{r}
+acled_sf <- acled_sf %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>%
+  st_transform(crs = 32647) %>%
+  mutate(
+    event_date = dmy(event_date)
+  )
+```
+
+
+### Organising Data: Split data into years and quarters
+
+Separate data into years 2021-2024
+
+
+```{r}
+acled_sf_2021 <- acled_sf %>%
+  filter(year == 2021)
+
+acled_sf_2022 <- acled_sf %>%
+  filter(year == 2022)
+
+acled_sf_2023 <- acled_sf %>%
+  filter(year == 2023)
+
+acled_sf_2024 <- acled_sf %>%
+  filter(year == 2024)
+```
+
+
+separate data from each year to quarters Q1-Q4
+
+
+```{r}
+acled_sf_2021_q1 <- acled_sf_2021 %>%
+  filter(quarters(event_date) == "Q1")
+acled_sf_2021_q2 <- acled_sf_2021 %>%
+  filter(quarters(event_date) == "Q2")
+acled_sf_2021_q3 <- acled_sf_2021 %>%
+  filter(quarters(event_date) == "Q3")
+acled_sf_2021_q4 <- acled_sf_2021 %>%
+  filter(quarters(event_date) == "Q4")
+
+acled_sf_2022_q1 <- acled_sf_2022 %>%
+  filter(quarters(event_date) == "Q1")
+acled_sf_2022_q2 <- acled_sf_2022 %>%
+  filter(quarters(event_date) == "Q2")
+acled_sf_2022_q3 <- acled_sf_2022 %>%
+  filter(quarters(event_date) == "Q3")
+acled_sf_2022_q4 <- acled_sf_2022 %>%
+  filter(quarters(event_date) == "Q4")
+
+acled_sf_2023_q1 <- acled_sf_2023 %>%
+  filter(quarters(event_date) == "Q1")
+acled_sf_2023_q2 <- acled_sf_2023 %>%
+  filter(quarters(event_date) == "Q2")
+acled_sf_2023_q3 <- acled_sf_2023 %>%
+  filter(quarters(event_date) == "Q3")
+acled_sf_2023_q4 <- acled_sf_2023 %>%
+  filter(quarters(event_date) == "Q4")
+
+acled_sf_2024_q1 <- acled_sf_2024 %>%
+  filter(quarters(event_date) == "Q1")
+acled_sf_2024_q2 <- acled_sf_2024 %>%
+  filter(quarters(event_date) == "Q2")
+acled_sf_2024_q3 <- acled_sf_2024 %>%
+  filter(quarters(event_date) == "Q3")
+acled_sf_2024_q4 <- acled_sf_2024 %>%
+  filter(quarters(event_date) == "Q4")
+```
+
+
+Filter event types: Violence against civilians
+
+
+```{r}
+
+### VIOLENCE AGAINST CIVILIANS
+# Year 2021
+acled_sf_2021_q1_violence_civilians <- acled_sf_2021_q1 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2021_q2_violence_civilians <- acled_sf_2021_q2 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2021_q3_violence_civilians <- acled_sf_2021_q3 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2021_q4_violence_civilians <- acled_sf_2021_q4 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+
+# Year 2022
+acled_sf_2022_q1_violence_civilians <- acled_sf_2022_q1 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2022_q2_violence_civilians <- acled_sf_2022_q2 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2022_q3_violence_civilians <- acled_sf_2022_q3 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2022_q4_violence_civilians <- acled_sf_2022_q4 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+
+# Year 2023
+acled_sf_2023_q1_violence_civilians <- acled_sf_2023_q1 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2023_q2_violence_civilians <- acled_sf_2023_q2 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2023_q3_violence_civilians <- acled_sf_2023_q3 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2023_q4_violence_civilians <- acled_sf_2023_q4 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+
+# Year 2024
+acled_sf_2024_q1_violence_civilians <- acled_sf_2024_q1 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2024_q2_violence_civilians <- acled_sf_2024_q2 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2024_q3_violence_civilians <- acled_sf_2024_q3 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+acled_sf_2024_q4_violence_civilians <- acled_sf_2024_q4 %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+```
+
+
+### **Converting sf format into spatstat’s ppp format**
+
+
+```{r}
+acled_ppp_2021_q1_violence_civilians <- as.ppp(acled_sf_2021_q1_violence_civilians)
+acled_ppp_2021_q2_violence_civilians <- as.ppp(acled_sf_2021_q2_violence_civilians)
+acled_ppp_2021_q3_violence_civilians <- as.ppp(acled_sf_2021_q3_violence_civilians)
+acled_ppp_2021_q4_violence_civilians <- as.ppp(acled_sf_2021_q4_violence_civilians)
+```
+
+```{r}
+plot(acled_ppp_2021_q1_violence_civilians)
+
+```
+
+```{r}
+summary(acled_ppp_2021_q1_violence_civilians)
+```
+
+
+### Evaluate duplicate points
+
+
+```{r}
+any(duplicated(acled_ppp_2021_q1_violence_civilians))
+```
+
+
+### **Creating *owin* object**
+
+
+```{r}
+mpsz_adm1_owin <- as.owin(mpsz_adm1_sf)
+mpsz_adm1_owin
+```
+
+
+### **Combining point events object and owin object**
+
+
+```{r}
+acled_ppp_2021_q1_violence_civilians <- acled_ppp_2021_q1_violence_civilians[mpsz_adm1_owin]
+acled_ppp_2021_q2_violence_civilians <- acled_ppp_2021_q2_violence_civilians[mpsz_adm1_owin]
+acled_ppp_2021_q3_violence_civilians <- acled_ppp_2021_q3_violence_civilians[mpsz_adm1_owin]
+acled_ppp_2021_q4_violence_civilians <- acled_ppp_2021_q4_violence_civilians[mpsz_adm1_owin]
+```
+
+```{r}
+plot(acled_ppp_2021_q3_violence_civilians)
+```
+
+
+KDE layers for violence against civilians
+
+
+```{r}
+acled_ppp_2021_q1_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q1_violence_civilians, 1000, "km")
+acled_ppp_2021_q2_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q2_violence_civilians, 1000, "km")
+acled_ppp_2021_q3_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q3_violence_civilians, 1000, "km")
+acled_ppp_2021_q4_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q4_violence_civilians, 1000, "km")
+
+kde_2021_q1_violence_civilians <- density(acled_ppp_2021_q1_violence_civilians.km,
+                              sigma=bw.diggle,
+                              edge=TRUE,
+                              kernel="disc",
+                              main="2021 Q1")
+kde_2021_q2_violence_civilians <- density(acled_ppp_2021_q2_violence_civilians.km,
+                              sigma=bw.diggle,
+                              edge=TRUE,
+                              kernel="disc",
+                              main="2021 Q2")
+kde_2021_q3_violence_civilians <- density(acled_ppp_2021_q3_violence_civilians.km,
+                              sigma=bw.diggle,
+                              edge=TRUE,
+                              kernel="disc",
+                              main="2021 Q3")
+kde_2021_q4_violence_civilians <- density(acled_ppp_2021_q4_violence_civilians.km,
+                              sigma=bw.diggle,
+                              edge=TRUE,
+                              kernel="disc",
+                              main="2021 Q4")
+```
+
+```{r}
+
+plot(kde_2021_q1_violence_civilians)
+plot(kde_2021_q2_violence_civilians)
+plot(kde_2021_q3_violence_civilians)
+plot(kde_2021_q4_violence_civilians)
+```
+
+
+Rescaling KDE values
+
+
+```{r}
+acled_2021_q1_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q1_violence_civilians, 1000, "km")
+```
+
+
+KDE layers for violence against civilians using rescaled kde values
+
+
+```{r}
+kde_2021_q1_violence_civilians <- density(acled_2021_q1_violence_civilians.km,
+                              sigma=bw.diggle,
+                              edge=TRUE,
+                            kernel="gaussian") 
+```
+
+```{r}
+plot(kde_2021_q1_violence_civilians)
+```
+
+```{r}
+bw <- bw.diggle(acled_ppp_2021_q1_violence_civilians)
+bw
+```
+
+
+Visualise violence against civilians per quarter from year 2021 to 2024
+
+
+```{r, fig.width = 12, fig.height = 100}
+
+# # Year 2021
+# map_2021_q1 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2021_q1_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q1 2021")
+# 
+# map_2021_q2 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2021_q2_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q2 2021")
+# 
+# map_2021_q3 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2021_q3_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q3 2021")
+# 
+# map_2021_q4 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2021_q4_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q4 2021")
+# 
+# # Year 2022
+# map_2022_q1 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2022_q1_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q1 2022")
+# 
+# map_2022_q2 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2022_q2_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q2 2022")
+# 
+# map_2022_q3 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2022_q3_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q3 2022")
+# 
+# map_2022_q4 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2022_q4_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q4 2022")
+# 
+# # Year 2023
+# map_2023_q1 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2023_q1_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q1 2023")
+# 
+# map_2023_q2 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2023_q2_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q2 2023")
+# 
+# map_2023_q3 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2023_q3_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q3 2023")
+# 
+# map_2023_q4 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2023_q4_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q4 2023")
+# 
+# # Year 2024
+# map_2024_q1 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2024_q1_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q1 2024")
+# 
+# map_2024_q2 <- tm_shape(mpsz_adm1) +
+#   tm_polygons() +
+#   tm_shape(acled_sf_2024_q2_violence_civilians) +
+#   tm_dots(size = 0.1) +
+#   tm_layout(title = "Q2 2024")
+# 
+# tmap_arrange(
+#   map_2021_q1, map_2021_q2, map_2021_q3, map_2021_q4,
+#   map_2022_q1, map_2022_q2, map_2022_q3, map_2022_q4,
+#   map_2023_q1, map_2023_q2, map_2023_q3, map_2023_q4,
+#   map_2024_q1, map_2024_q2,
+#   ncol = 4)
+```
+
+
+Testing plot
+
+
+```{r}
+tm_shape(mpsz_adm1) +
+  tm_polygons() +
+  tm_shape(acled_sf_2021_q1_violence_civilians) +
+  tm_dots()
+```
+
+
+Visualise by Country States
+
+
+```{r}
+tm_shape(mpsz_adm1) +
+  tm_polygons() +
+  tm_shape(acled_sf) +
+  tm_dots(size = 0.1) +
+  tm_facets(
+    by = "admin1",
+    free.coords = FALSE, #prevent zooming to coords, show the entire map
+    drop.units = TRUE
+  )
+```
+
+
+Next, let's find out which state has the highest risk for civilians
+
+First we have to group the data by state, then filter filter event_type of "Violence against civilians"
+
+
+```{r}
+acled_sf_violence_civilians <- acled_sf %>%
+  group_by(admin1) %>%
+  filter(event_type == "Violence against civilians")
+
+acled_sf_violence_civilians
+```
+
+```{r}
+tm_shape(mpsz_adm1) +
+  tm_polygons() +
+  tm_shape(acled_sf_violence_civilians) +
+  tm_dots(size = 0.1) +
+  tm_facets(
+    by = "admin1",
+    free.coords = FALSE, #prevent zooming to coords, show the entire map
+    drop.units = TRUE
+  )
+```
+
+
+Next, Mandalay will be the state we want to find out which hour is the most dangerous for civilians to wander outside.
+
+
+```{r}
+
+acled_sf_violence_civilians_mandalay_hour <- acled_sf_violence_civilians %>%
+  filter(admin1 == "Mandalay") %>%
+  select(Hour)
+
+acled_sf_violence_civilians_mandalay_hour
+```
+
+
+### **Converting from sf format into spatstat’s ppp format**
+
+
+```{r}
+acled_sf_violence_civilians_mandalay_hour_ppp <- as.ppp(acled_sf_violence_civilians_mandalay_hour)
+
+acled_sf_violence_civilians_mandalay_hour_ppp
+```
+
+```{r}
+plot(acled_sf_violence_civilians_mandalay_hour_ppp)
+```
+
+```{r}
+summary(acled_sf_violence_civilians_mandalay_hour_ppp)
+```
+
+
+Notice that there is a warning of duplicated points in variable \`acled_sf_violence_civilians_mandalay_hour_ppp\`.
+
+### **Handling duplicated points**
+
+We will use the method of jittering which will add a small pertubation to the duplicate points so that they do not occupy the exact same space.
+
+
+```{r}
+acled_sf_violence_civilians_mandalay_hour_ppp_jit <- rjitter(
+  acled_sf_violence_civilians_mandalay_hour_ppp, 
+  retry=TRUE, 
+  nsim=1, 
+  drop=TRUE
+)
+```
+
+```{r}
+any(duplicated(acled_sf_violence_civilians_mandalay_hour_ppp_jit))
+```
+
+
+### **Creating *owin* object**
+
+
+```{r}
+mpsz_adm1_owin <- as.owin(mpsz_adm1)
+mpsz_adm1_owin
+```
+
+```{r}
+class(mpsz_adm1_owin)
+```
+
+
+#### Extracting study area
+
+
+```{r}
+mandalay <- mpsz_adm1 %>%
+  filter(ST == "Mandalay")
+
+mandalay_owin <- as.owin(mandalay)
+```
+
+
+### **Combining point events object and owin object**
+
+
+```{r}
+acled_sf_violence_civilians_mandalay_hour_ppp = acled_sf_violence_civilians_mandalay_hour_ppp_jit[mandalay_owin]
+```
+
+```{r}
+plot(acled_sf_violence_civilians_mandalay_hour_ppp)
+```
+
