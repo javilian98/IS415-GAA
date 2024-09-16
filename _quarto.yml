@@ -30,6 +30,8 @@ website:
           href: "In-class_Ex/ICE_03/ice_03.html"
         - text: "In-class Exercise 4"
           href: "In-class_Ex/ICE_04/ice_04.html"
+        - text: "In-class Exercise 5"
+          href: "In-class_Ex/ICE_05/ice_05.html"
 
 format:
   html:
