@@ -1,0 +1,149 @@
+---
+title: "In-class Exercise 5"
+author: "Javier Lian"
+---
+
+## Loading the package
+
+```{r}
+pacman::p_load(sf, spdep, tmap, tidyverse, knitr, GWmodel)
+```
+
+Preparing the data
+
+```{r}
+hunan_2012 <- read_csv("data/aspatial/Hunan_2012.csv")
+```
+
+```{r}
+#| eval: false
+hunan_sf <- st_read(
+  dsn = "data/geospatial",
+  layer = "Hunan"
+)
+hunan_sf <- left_join(hunan_sf, hunan_2012) %>% 
+  select(1, 3, 7, 15, 16, 31, 32)
+```
+
+```{r}
+#| eval: false
+write_rds(hunan_sf, "data/rds/hunan_sf.rds")
+```
+
+```{r}
+#| echo: false
+hunan_sf <- read_rds("data/rds/hunan_sf.rds")
+```
+
+### Converting to SpatialPolygonDataFrame
+
+```{r}
+hunan_sp <- hunan_sf %>% as_Spatial()
+```
+
+### Geographically Weighted Summary Statistics with adaptive bandwidth
+
+Determine adaptive bandwidth
+
+::: panel-tabset
+### AIC
+
+```{r}
+bw_AIC <- bw.gwr(
+  GDPPC ~1,
+  data = hunan_sp,
+  approach = "AIC",
+  adaptive = TRUE,
+  kernel = "bisquare",
+  longlat = T
+)
+```
+
+### Cross-Validation
+
+```{r}
+bw_AIC <- bw.gwr(
+  GDPPC ~1,
+  data = hunan_sp,
+  approach = "CV",
+  adaptive = TRUE,
+  kernel = "bisquare",
+  longlat = T
+)
+```
+:::
+
+### Geographically Weighted Summary Statistics with fixed bandwidth
+
+Determine fixed bandwidth 
+
+::: panel-tabset
+
+### AIC
+
+```{r}
+bw_AIC <- bw.gwr(
+  GDPPC ~1,
+  data = hunan_sp,
+  approach = "AIC",
+  adaptive = FALSE,
+  kernel = "bisquare",
+  longlat = T
+)
+```
+
+### Cross-Validation
+
+```{r}
+bw_AIC <- bw.gwr(
+  GDPPC ~1,
+  data = hunan_sp,
+  approach = "CV",
+  adaptive = FALSE,
+  kernel = "bisquare",
+  longlat = T
+)
+```
+:::
+
+### Geographically Weighted Summary Statistics with fixed bandwidth
+
+Computing weighted summary statistics
+```{r}
+gwstat <- gwss(
+  data = hunan_sp,
+  vars = "GDPPC",
+  bw = bw_AIC,
+  adaptive = TRUE,
+  kernel = "bisquare",
+  longlat = T
+)
+```
+
+Preparing the output data
+```{r}
+gwstat_df <- as.data.frame(gwstat$SDF)
+```
+
+Next, cbind() is used to append the newly derived data.frame onto hunan_sf sf dataframe
+```{r}
+hunan_gstat <- cbind(hunan_sf, gwstat_df)
+```
+
+```{r}
+tm_shape(hunan_gstat) +
+  tm_fill(
+    "GDPPC_LM",
+    n = 5,
+    style = "quantile"
+  ) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(
+    main.title = "Distribution of geographically weighted mean",
+    main.title.position = "center",
+    legend.text.size = 1.2,
+    legend.height = 1.50,
+    legend.width = 1.50,
+    frame = TRUE
+  )
+```
