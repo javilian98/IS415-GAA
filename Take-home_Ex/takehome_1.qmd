@@ -21,7 +21,7 @@ Armed conflict has been on the rise since about 2012, after a decline in the 199
 
 For the purpose of this assignment, armed conflict data of Myanmar between 2021-2024 from [Armed Conflict Location & Event Data (ACLED)](https://acleddata.com/), an independent, impartial, international non-profit organization collecting data on violent conflict and protest in all countries and territories in the world, should be used.
 
-In terms of event types, students should focus on at least four main event types, namely: Battles, Explosion/Remote violence, Strategic developments, and Violence against civilians.
+In terms of event types, students should focus on at least four main event types, namely: Battles, Explosions/Remote Violence, Strategic developments, and Violence against civilians.
 
 In terms of study period, students should focus on quarterly armed conflict events from January 2021 until June 2024.
 
@@ -37,6 +37,8 @@ In this hands-on exercise, five R packages will be used, they are:
 
 -   [**spatstat**](https://spatstat.org/), which has a wide range of useful functions for point pattern analysis. In this hands-on exercise, it will be used to perform 1st- and 2nd-order spatial point patterns analysis and derive kernel density estimation (KDE) layer.
 
+-   [**sparr**](https://tilmandavies.github.io/sparr/index.html), provides functions to estimate fixed and adaptive kernel-smoothed spatial relative risk surfaces via the density-ratio method and perform subsequent inference. Fixed-bandwidth spatiotemporal density and relative risk estimation is also supported.
+
 -   [**raster**](https://cran.r-project.org/web/packages/raster/) which reads, writes, manipulates, analyses and model of gridded spatial data (i.e. raster). In this hands-on exercise, it will be used to convert image output generate by spatstat into raster format.
 
 -   [**maptools**](https://cran.r-project.org/web/packages/maptools/index.html) which provides a set of tools for manipulating geographic data. In this hands-on exercise, we mainly use it to convert *Spatial* objects into *ppp* format of **spatstat**.
@@ -46,13 +48,13 @@ In this hands-on exercise, five R packages will be used, they are:
 Use the code chunk below to install and launch the five R packages.
 
 ```{r}
-pacman::p_load(sf, raster, spatstat, tmap, tidyverse)
+pacman::p_load(sf, raster, spatstat, sparr, tmap, tidyverse)
 ```
 
 ## Importing Spatial Data File
 
 ```{r}
-acled_sf <- readr::read_csv("data/aspatial/ACLED_Myanmar.csv")
+acled <- readr::read_csv("data/aspatial/ACLED_Myanmar.csv")
 ```
 
 ## Importing Geospatial Data Files
@@ -65,39 +67,56 @@ mpsz_adm1_sf <- st_read(
   st_transform(crs = 32647)
 ```
 
+## Constant Variables
+
+```{r}
+### Constants
+# Define a named vector for event types
+event_types <- c(
+  "VIOLENCE_CIVILIANS" = "Violence against civilians",
+  "BATTLES" = "Battles",
+  "STRAT_DEVS" = "Strategic developments",
+  "EXPLOSIONS_REMOTE_VIOLENCE" = "Explosions/Remote violence"
+)
+
+# List of years and quarters
+CONST_YEARS <- 2021:2024
+CONST_QUARTERS <- 1:4
+```
+
 ## Geospatial Data wrangling
 
 ### Inspecting columns
 
 ```{r}
-colnames(acled_sf)
-ncol(acled_sf)
+colnames(acled)
+ncol(acled)
 ```
 
 ### Dropping unused columns
 
 ```{r}
-acled_sf <- acled_sf %>%
+acled <- acled %>%
   select(-iso, -region, -country, -notes, -time_precision)
 ```
 
 Inspecting columns again
 
 ```{r}
-colnames(acled_sf)
-ncol(acled_sf)
+colnames(acled)
+ncol(acled)
 ```
 
 ### Converting timezone to Yangon, Myanmar
 
 ```{r}
-acled_sf$timestamp <- as_datetime(acled_sf$timestamp, tz = "Asia/Yangon")
+acled$timestamp <- as_datetime(acled$timestamp, tz = "Asia/Yangon")
 ```
 
 Extract the Hour, Minutes and Seconds into their new respective columns from the timestamp column to be used later.
 
 ```{r}
-acled_sf <- acled_sf %>%
+acled <- acled %>%
   mutate(
     Hour = hour(timestamp),
     Minutes = minute(timestamp),
@@ -105,14 +124,16 @@ acled_sf <- acled_sf %>%
   )
 ```
 
-Now we are going to convert the longitude and latitude to CRS system of Myanmar
+Now we are going to convert the longitude and latitude to CRS system of Myanmar, and extract the month number to a new Month_num column. Likewise for quarter number into Quarter_num column.
 
 ```{r}
-acled_sf <- acled_sf %>%
+acled_sf <- acled %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>%
   st_transform(crs = 32647) %>%
   mutate(
-    event_date = dmy(event_date)
+    event_date = dmy(event_date),
+    Month_num = month(event_date),
+    Quarter_num = quarter(event_date)
   )
 ```
 
@@ -134,7 +155,7 @@ acled_sf_2024 <- acled_sf %>%
   filter(year == 2024)
 ```
 
-separate data from each year to quarters Q1-Q4
+Separate data from each year to quarters Q1-Q4
 
 ```{r}
 acled_sf_2021_q1 <- acled_sf_2021 %>%
@@ -168,399 +189,1102 @@ acled_sf_2024_q1 <- acled_sf_2024 %>%
   filter(quarters(event_date) == "Q1")
 acled_sf_2024_q2 <- acled_sf_2024 %>%
   filter(quarters(event_date) == "Q2")
-acled_sf_2024_q3 <- acled_sf_2024 %>%
-  filter(quarters(event_date) == "Q3")
-acled_sf_2024_q4 <- acled_sf_2024 %>%
-  filter(quarters(event_date) == "Q4")
 ```
 
-Filter event types: Violence against civilians
+### Divde data based on event types
+
+#### Helper function to derive data based on our types.
+
+Given the nature of the task which is to study each event data per quarter of each year, there will be a lot of repetitive codes by the end of this exercise. So the benefits it provides is an organised and reusable piece of code snippet that allows you to apply to other sets of data by changing certain arguments.
 
 ```{r}
+### Helper functions
+get_quarter_data_from_event_type <- function(data, event_type_arg) {
+  # Filter the data based on the specified event_type
+  filtered_data <- data %>%
+    group_by(admin1) %>%
+    filter(event_type == event_type_arg) %>%
+    select(Quarter_num) %>%
+  
+  # Return the filtered data
+  return(filtered_data)
+}
 
-### VIOLENCE AGAINST CIVILIANS
-# Year 2021
-acled_sf_2021_q1_violence_civilians <- acled_sf_2021_q1 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2021_q2_violence_civilians <- acled_sf_2021_q2 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2021_q3_violence_civilians <- acled_sf_2021_q3 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2021_q4_violence_civilians <- acled_sf_2021_q4 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-
-# Year 2022
-acled_sf_2022_q1_violence_civilians <- acled_sf_2022_q1 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2022_q2_violence_civilians <- acled_sf_2022_q2 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2022_q3_violence_civilians <- acled_sf_2022_q3 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2022_q4_violence_civilians <- acled_sf_2022_q4 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-
-# Year 2023
-acled_sf_2023_q1_violence_civilians <- acled_sf_2023_q1 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2023_q2_violence_civilians <- acled_sf_2023_q2 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2023_q3_violence_civilians <- acled_sf_2023_q3 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2023_q4_violence_civilians <- acled_sf_2023_q4 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-
-# Year 2024
-acled_sf_2024_q1_violence_civilians <- acled_sf_2024_q1 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2024_q2_violence_civilians <- acled_sf_2024_q2 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2024_q3_violence_civilians <- acled_sf_2024_q3 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-acled_sf_2024_q4_violence_civilians <- acled_sf_2024_q4 %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
+populate_quarter_data_from_event_type <- function(event_type, data_list_name, years, quarters) {
+  # Initialize an empty list to store the results
+  event_data_list <- list()
+  
+  # Loop over the years and quarters to populate the list
+  for (year in years) {
+    for (quarter in quarters) {
+      if (year == 2024 && quarter > 2) next  # Skip quarters beyond Q2 for 2024
+      
+      # Construct the variable name dynamically
+      var_name <- paste0(year, "_q", quarter)
+      data_var_name <- paste0("acled_sf_", year, "_q", quarter)
+      
+      # Get the event type data and store it in the list
+      event_data_list[[var_name]] <- get_quarter_data_from_event_type(
+        get(data_var_name),
+        event_type
+      )
+    }
+  }
+  
+  # Assign the populated list to the specified list name
+  assign(data_list_name, event_data_list, envir = .GlobalEnv)
+}
 ```
 
-### **Converting sf format into spatstat’s ppp format**
+Now with the help of the helper functions created, we are going to get all the the four event type data separated by quarters of each year.
+
+::: panel-tabset
+### Violence Against Civilians
 
 ```{r}
-acled_ppp_2021_q1_violence_civilians <- as.ppp(acled_sf_2021_q1_violence_civilians)
-acled_ppp_2021_q2_violence_civilians <- as.ppp(acled_sf_2021_q2_violence_civilians)
-acled_ppp_2021_q3_violence_civilians <- as.ppp(acled_sf_2021_q3_violence_civilians)
-acled_ppp_2021_q4_violence_civilians <- as.ppp(acled_sf_2021_q4_violence_civilians)
+populate_quarter_data_from_event_type(
+  event_types["VIOLENCE_CIVILIANS"], 
+  "violence_civilians_sf",
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+
+### Explosions/Remote Violence
+
+```{r}
+populate_quarter_data_from_event_type(
+  event_types["EXPLOSIONS_REMOTE_VIOLENCE"], 
+  "explosions_remote_violence_sf",
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+
+### Strategic Developments
+
+```{r}
+populate_quarter_data_from_event_type(
+  event_types["STRAT_DEVS"], 
+  "strat_devs_sf",
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+
+### Battles
+
+```{r}
+populate_quarter_data_from_event_type(
+  event_types["BATTLES"], 
+  "battles_sf",
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+:::
+
+### Converting sf format into spatstat’s ppp format
+
+spatstat requires the analytical data in ppp object form. We will write a helper function to convert each list of data from event types to PPP format.
+
+#### Helper functions to converrt sf to ppp
+
+```{r}
+convert_to_ppp <- function(data_list_name, sf_list, years, quarters) {
+  # Initialize an empty list to store the results
+  event_data_list <- list()
+  
+  # Loop over the years and quarters to populate the list
+  for (year in years) {
+    for (quarter in quarters) {
+      if (year == 2024 && quarter > 2) next  # Skip quarters beyond Q2 for 2024
+      
+      # Construct the variable name dynamically
+      var_name <- paste0(year, "_q", quarter)
+      
+      # Get the event type data and store it in the list
+      event_data_list[[var_name]] <- as.ppp(sf_list[[var_name]])
+    }
+  }
+  
+  # Assign the populated list to the specified list name
+  assign(data_list_name, event_data_list, envir = .GlobalEnv)
+}
 ```
 
 ```{r}
-plot(acled_ppp_2021_q1_violence_civilians)
+convert_to_ppp("violence_civilians_ppp", violence_civilians_sf, CONST_YEARS, CONST_QUARTERS)
+convert_to_ppp("explosions_remote_violence_ppp", explosions_remote_violence_sf, CONST_YEARS, CONST_QUARTERS)
+convert_to_ppp("strat_devs_ppp", strat_devs_sf, CONST_YEARS, CONST_QUARTERS)
+convert_to_ppp("battles_ppp", battles_sf, CONST_YEARS, CONST_QUARTERS)
+```
+
+Now, let us plot and have a look at the data of Q1 2021 from the list violence_civilians_ppp.
+
+```{r}
+plot(violence_civilians_ppp[["2021_q1"]])
 
 ```
 
 ```{r}
-summary(acled_ppp_2021_q1_violence_civilians)
+summary(violence_civilians_ppp[["2021_q1"]])
 ```
+
+Notice the warning message about duplicates. In spatial point patterns analysis an issue of significant is the presence of duplicates. The statistical methodology used for spatial point patterns processes is based largely on the assumption that process are simple, that is, that the points cannot be coincident.
 
 ### Evaluate duplicate points
 
+We can check the duplication in a ppp object by using the code chunk below.
+
 ```{r}
-any(duplicated(acled_ppp_2021_q1_violence_civilians))
+any(duplicated(violence_civilians_ppp[["2021_q1"]]))
 ```
 
-### **Creating *owin* object**
+### Removing duplicated points
+
+We will use jitterirng to curb the duplicates for all the data.
+
+#### Helper function to remove duplicates
+
+```{r}
+remove_duplicates <- function(data_list_name, ppp_list, years, quarters) {
+  # Initialize an empty list to store the results
+  event_data_list <- list()
+  
+  # Loop over the years and quarters to populate the list
+  for (year in years) {
+    for (quarter in quarters) {
+      if (year == 2024 && quarter > 2) next  # Skip quarters beyond Q2 for 2024
+      
+      # Construct the variable name dynamically
+      var_name <- paste0(year, "_q", quarter)
+      
+      # Get the event type data and store it in the list
+      event_data_list[[var_name]] <- rjitter(ppp_list[[var_name]], retry=TRUE, nsim=1, drop=TRUE)
+    }
+  }
+  
+  # Assign the populated list to the specified list name
+  assign(data_list_name, event_data_list, envir = .GlobalEnv)
+}
+```
+
+```{r}
+remove_duplicates("violence_civilians_ppp", violence_civilians_ppp, CONST_YEARS, CONST_QUARTERS)
+remove_duplicates("explosions_remote_violence_ppp", explosions_remote_violence_ppp, CONST_YEARS, CONST_QUARTERS)
+remove_duplicates("strat_devs_ppp", strat_devs_ppp, CONST_YEARS, CONST_QUARTERS)
+remove_duplicates("battles_ppp", battles_ppp, CONST_YEARS, CONST_QUARTERS)
+```
+
+### Evaluate duplicate points again
+
+We have removed all the duplicates as you can see from the output below.
+
+```{r}
+any(duplicated(violence_civilians_ppp[["2021_q1"]]))
+```
+
+### Creating *owin* object
+
+When analysing spatial point patterns, it is a good practice to confine the analysis with a geographical area like Mynanmar boundary. In spatstat, an object called owin is specially designed to represent this polygonal region.
+
+The code chunk below is used to convert the SpatialPolygon object into owin object of spatstat.
 
 ```{r}
 mpsz_adm1_owin <- as.owin(mpsz_adm1_sf)
 mpsz_adm1_owin
 ```
 
-### **Combining point events object and owin object**
+### Combining point events object and owin object
+
+#### Helper functions for combining ppp obj with owin obj, and plotting them.
+
+In this last step of geospatial data wrangling, we will combine the owin object with the PPP list of data.
 
 ```{r}
-acled_ppp_2021_q1_violence_civilians <- acled_ppp_2021_q1_violence_civilians[mpsz_adm1_owin]
-acled_ppp_2021_q2_violence_civilians <- acled_ppp_2021_q2_violence_civilians[mpsz_adm1_owin]
-acled_ppp_2021_q3_violence_civilians <- acled_ppp_2021_q3_violence_civilians[mpsz_adm1_owin]
-acled_ppp_2021_q4_violence_civilians <- acled_ppp_2021_q4_violence_civilians[mpsz_adm1_owin]
+combine_ppp_with_owin <- function(data_list_name, ppp_list, owin_obj, years, quarters) {
+  # Initialize an empty list to store the results
+  event_data_list <- list()
+  
+  # Loop over the years and quarters to populate the list
+  for (year in years) {
+    for (quarter in quarters) {
+      if (year == 2024 && quarter > 2) next  # Skip quarters beyond Q2 for 2024
+      
+      # Construct the variable name dynamically
+      var_name <- paste0(year, "_q", quarter)
+      
+      # Get the event type data and store it in the list
+      event_data_list[[var_name]] <- ppp_list[[var_name]][owin_obj]
+    }
+  }
+  
+  # Assign the populated list to the specified list name
+  assign(data_list_name, event_data_list, envir = .GlobalEnv)
+}
+
+# Helper function to plot the list of  data
+
+helper_func_plot_list <- function(kde_list) {
+  for (name in names(kde_list)) {
+    plot(kde_list[[name]], main = name)
+  }
+}
+```
+
+::: panel-tabset
+### Violence Against Civilians
+
+```{r}
+combine_ppp_with_owin("violence_civilians_ppp", violence_civilians_ppp, mpsz_adm1_owin, CONST_YEARS, CONST_QUARTERS)
 ```
 
 ```{r}
-plot(acled_ppp_2021_q3_violence_civilians)
+helper_func_plot_list(violence_civilians_ppp)
 ```
 
-KDE layers for violence against civilians
+### Explosions/Remote Violence
 
 ```{r}
-acled_ppp_2021_q1_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q1_violence_civilians, 1000, "km")
-acled_ppp_2021_q2_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q2_violence_civilians, 1000, "km")
-acled_ppp_2021_q3_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q3_violence_civilians, 1000, "km")
-acled_ppp_2021_q4_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q4_violence_civilians, 1000, "km")
-
-kde_2021_q1_violence_civilians <- density(acled_ppp_2021_q1_violence_civilians.km,
-                              sigma=bw.diggle,
-                              edge=TRUE,
-                              kernel="disc",
-                              main="2021 Q1")
-kde_2021_q2_violence_civilians <- density(acled_ppp_2021_q2_violence_civilians.km,
-                              sigma=bw.diggle,
-                              edge=TRUE,
-                              kernel="disc",
-                              main="2021 Q2")
-kde_2021_q3_violence_civilians <- density(acled_ppp_2021_q3_violence_civilians.km,
-                              sigma=bw.diggle,
-                              edge=TRUE,
-                              kernel="disc",
-                              main="2021 Q3")
-kde_2021_q4_violence_civilians <- density(acled_ppp_2021_q4_violence_civilians.km,
-                              sigma=bw.diggle,
-                              edge=TRUE,
-                              kernel="disc",
-                              main="2021 Q4")
-```
-
-```{r}
-
-plot(kde_2021_q1_violence_civilians)
-plot(kde_2021_q2_violence_civilians)
-plot(kde_2021_q3_violence_civilians)
-plot(kde_2021_q4_violence_civilians)
-```
-
-Rescaling KDE values
-
-```{r}
-acled_2021_q1_violence_civilians.km <- rescale.ppp(acled_ppp_2021_q1_violence_civilians, 1000, "km")
-```
-
-KDE layers for violence against civilians using rescaled kde values
-
-```{r}
-kde_2021_q1_violence_civilians <- density(acled_2021_q1_violence_civilians.km,
-                              sigma=bw.diggle,
-                              edge=TRUE,
-                            kernel="gaussian") 
-```
-
-```{r}
-plot(kde_2021_q1_violence_civilians)
-```
-
-```{r}
-bw <- bw.diggle(acled_ppp_2021_q1_violence_civilians)
-bw
-```
-
-Visualise violence against civilians per quarter from year 2021 to 2024
-
-```{r, fig.width = 12, fig.height = 100}
-
-# # Year 2021
-# map_2021_q1 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2021_q1_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q1 2021")
-# 
-# map_2021_q2 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2021_q2_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q2 2021")
-# 
-# map_2021_q3 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2021_q3_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q3 2021")
-# 
-# map_2021_q4 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2021_q4_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q4 2021")
-# 
-# # Year 2022
-# map_2022_q1 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2022_q1_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q1 2022")
-# 
-# map_2022_q2 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2022_q2_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q2 2022")
-# 
-# map_2022_q3 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2022_q3_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q3 2022")
-# 
-# map_2022_q4 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2022_q4_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q4 2022")
-# 
-# # Year 2023
-# map_2023_q1 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2023_q1_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q1 2023")
-# 
-# map_2023_q2 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2023_q2_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q2 2023")
-# 
-# map_2023_q3 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2023_q3_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q3 2023")
-# 
-# map_2023_q4 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2023_q4_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q4 2023")
-# 
-# # Year 2024
-# map_2024_q1 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2024_q1_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q1 2024")
-# 
-# map_2024_q2 <- tm_shape(mpsz_adm1) +
-#   tm_polygons() +
-#   tm_shape(acled_sf_2024_q2_violence_civilians) +
-#   tm_dots(size = 0.1) +
-#   tm_layout(title = "Q2 2024")
-# 
-# tmap_arrange(
-#   map_2021_q1, map_2021_q2, map_2021_q3, map_2021_q4,
-#   map_2022_q1, map_2022_q2, map_2022_q3, map_2022_q4,
-#   map_2023_q1, map_2023_q2, map_2023_q3, map_2023_q4,
-#   map_2024_q1, map_2024_q2,
-#   ncol = 4)
-```
-
-Testing plot
-
-```{r}
-tm_shape(mpsz_adm1) +
-  tm_polygons() +
-  tm_shape(acled_sf_2021_q1_violence_civilians) +
-  tm_dots()
-```
-
-Visualise by Country States
-
-```{r}
-tm_shape(mpsz_adm1) +
-  tm_polygons() +
-  tm_shape(acled_sf) +
-  tm_dots(size = 0.1) +
-  tm_facets(
-    by = "admin1",
-    free.coords = FALSE, #prevent zooming to coords, show the entire map
-    drop.units = TRUE
-  )
-```
-
-Next, let's find out which state has the highest risk for civilians
-
-First we have to group the data by state, then filter filter event_type of "Violence against civilians"
-
-```{r}
-acled_sf_violence_civilians <- acled_sf %>%
-  group_by(admin1) %>%
-  filter(event_type == "Violence against civilians")
-
-acled_sf_violence_civilians
-```
-
-```{r}
-tm_shape(mpsz_adm1) +
-  tm_polygons() +
-  tm_shape(acled_sf_violence_civilians) +
-  tm_dots(size = 0.1) +
-  tm_facets(
-    by = "admin1",
-    free.coords = FALSE, #prevent zooming to coords, show the entire map
-    drop.units = TRUE
-  )
-```
-
-Next, Mandalay will be the state we want to find out which hour is the most dangerous for civilians to wander outside.
-
-```{r}
-
-acled_sf_violence_civilians_mandalay_hour <- acled_sf_violence_civilians %>%
-  filter(admin1 == "Mandalay") %>%
-  select(Hour)
-
-acled_sf_violence_civilians_mandalay_hour
-```
-
-### **Converting from sf format into spatstat’s ppp format**
-
-```{r}
-acled_sf_violence_civilians_mandalay_hour_ppp <- as.ppp(acled_sf_violence_civilians_mandalay_hour)
-
-acled_sf_violence_civilians_mandalay_hour_ppp
-```
-
-```{r}
-plot(acled_sf_violence_civilians_mandalay_hour_ppp)
-```
-
-```{r}
-summary(acled_sf_violence_civilians_mandalay_hour_ppp)
-```
-
-Notice that there is a warning of duplicated points in variable \`acled_sf_violence_civilians_mandalay_hour_ppp\`.
-
-### **Handling duplicated points**
-
-We will use the method of jittering which will add a small pertubation to the duplicate points so that they do not occupy the exact same space.
-
-```{r}
-acled_sf_violence_civilians_mandalay_hour_ppp_jit <- rjitter(
-  acled_sf_violence_civilians_mandalay_hour_ppp, 
-  retry=TRUE, 
-  nsim=1, 
-  drop=TRUE
+combine_ppp_with_owin(
+  "explosions_remote_violence_ppp", 
+  explosions_remote_violence_ppp, 
+  mpsz_adm1_owin, 
+  CONST_YEARS, 
+  CONST_QUARTERS
 )
 ```
 
 ```{r}
-any(duplicated(acled_sf_violence_civilians_mandalay_hour_ppp_jit))
+helper_func_plot_list(explosions_remote_violence_ppp)
 ```
+:::
 
-### **Creating *owin* object**
+### Strategic Developments
 
 ```{r}
-mpsz_adm1_owin <- as.owin(mpsz_adm1)
-mpsz_adm1_owin
-```
-
-```{r}
-class(mpsz_adm1_owin)
-```
-
-#### Extracting study area
-
-```{r}
-mandalay <- mpsz_adm1 %>%
-  filter(ST == "Mandalay")
-
-mandalay_owin <- as.owin(mandalay)
-```
-
-### **Combining point events object and owin object**
-
-```{r}
-acled_sf_violence_civilians_mandalay_hour_ppp = acled_sf_violence_civilians_mandalay_hour_ppp_jit[mandalay_owin]
+combine_ppp_with_owin("strat_devs_ppp", strat_devs_ppp, mpsz_adm1_owin, CONST_YEARS, CONST_QUARTERS)
 ```
 
 ```{r}
-plot(acled_sf_violence_civilians_mandalay_hour_ppp)
+helper_func_plot_list(strat_devs_ppp)
 ```
+
+### Battles
+
+```{r}
+combine_ppp_with_owin("battles_ppp", battles_ppp, mpsz_adm1_owin, CONST_YEARS, CONST_QUARTERS)
+```
+
+```{r}
+helper_func_plot_list(battles_ppp)
+```
+
+## Deriving KDE layers for Event Types
+
+### Rescaling unit measurement to km
+
+In the code chunk below, the helper function is used to covert the unit of measurement from meter to kilometer.
+
+#### Helper function to rescale unit measurement to km
+
+```{r}
+rescale_to_km <- function(data_list_name, ppp_list, years, quarters) {
+  # Initialize an empty list to store the results
+  event_data_list <- list()
+  
+  # Loop over the years and quarters to populate the list
+  for (year in years) {
+    for (quarter in quarters) {
+      if (year == 2024 && quarter > 2) next  # Skip quarters beyond Q2 for 2024
+      
+      # Construct the variable name dynamically
+      var_name <- paste0(year, "_q", quarter)
+      
+      # Get the event type data and store it in the list
+      event_data_list[[var_name]] <- rescale.ppp(ppp_list[[var_name]], 1000, "km")
+    }
+  }
+  
+  # Assign the populated list to the specified list name
+  assign(data_list_name, event_data_list, envir = .GlobalEnv)
+}
+```
+
+```{r}
+rescale_to_km("violence_civilians_ppp_km", violence_civilians_ppp, CONST_YEARS, CONST_QUARTERS)
+rescale_to_km("explosions_remote_violence_ppp_km", explosions_remote_violence_ppp, CONST_YEARS, CONST_QUARTERS)
+rescale_to_km("strat_devs_ppp_km", strat_devs_ppp, CONST_YEARS, CONST_QUARTERS)
+rescale_to_km("battles_ppp_km", battles_ppp, CONST_YEARS, CONST_QUARTERS)
+```
+
+### Computing KDE layers for Event Types
+
+Helper function for computing KDE
+
+```{r}
+
+helper_func_process_kde <- function(data_list_name, ppp_list, years, quarters, kernel_type, sigma_type) {
+  # Initialize an empty list to store the results
+  event_data_list <- list()
+  
+  # Loop over the years and quarters to populate the list
+  for (year in years) {
+    for (quarter in quarters) {
+      if (year == 2024 && quarter > 2) next  # Skip quarters beyond Q2 for 2024
+      
+      # Construct the variable name dynamically
+      var_name <- paste0(year, "_q", quarter)
+      
+      # Get the event type data and store it in the list
+      event_data_list[[var_name]] = density(
+        ppp_list[[var_name]],
+        sigma = sigma_type,
+        edge = TRUE,
+        kernel = kernel_type,
+        main = paste(year, "Q", quarter)
+      )
+    }
+  }
+  
+  # Assign the populated list to the specified list name
+  assign(data_list_name, event_data_list, envir = .GlobalEnv)
+}
+```
+
+> I have tried using automatic bandwidth selection methods however, due to the performance limitations of my computer, it took extremely long to compute every single data.
+>
+> My alternative solution is to play around using fixed bandwidth, and the value of 10 seemed to give a decent visualisation of the plots.
+
+::: panel-tabset
+### Violence Against Civilians
+
+```{r}
+sigma_value <- 10
+
+helper_func_process_kde(
+  "kde_list_violence_civilians",
+  violence_civilians_ppp_km,
+  CONST_YEARS, 
+  CONST_QUARTERS, 
+  "gaussian", 
+  sigma_value
+)
+```
+
+### Explosion & Remote Violence
+
+```{r}
+sigma_value <- 10
+
+helper_func_process_kde(
+  "kde_list_explosions_remote_violence",
+  explosions_remote_violence_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS,
+  "gaussian",
+  sigma_value
+)
+```
+
+### Strategic Developments
+
+```{r}
+sigma_value <- 10
+
+helper_func_process_kde(
+  "kde_list_strat_devs",
+  strat_devs_ppp_km,
+  CONST_YEARS,
+  CONST_QUARTERS,
+  "gaussian",
+  sigma_value
+)
+```
+
+### Battles
+
+```{r}
+sigma_value <- 10
+
+helper_func_process_kde(
+  "kde_list_battles",
+  battles_ppp_km,
+  CONST_YEARS, 
+  CONST_QUARTERS, 
+  "gaussian", 
+  sigma_value
+)
+```
+:::
+
+### Visualising KDE Layers
+
+Helper function for plotting the KDE Layers
+
+```{r}
+helper_func_plot_kde_list <- function(kde_list, xlab = "Distance (km)", ylab = "Density") {
+  for (name in names(kde_list)) {
+    plot(kde_list[[name]], main = name, xlab = xlab, ylab = ylab)
+  }
+}
+```
+
+::: panel-tabset
+### Violence Against Civilians
+
+```{r}
+
+helper_func_plot_kde_list(kde_list_violence_civilians)
+```
+
+### Explosions/Remote Violence
+
+```{r}
+helper_func_plot_kde_list(kde_list_explosions_remote_violence)
+```
+
+### Strategic Developments
+
+```{r}
+helper_func_plot_kde_list(kde_list_strat_devs)
+```
+
+### Battles
+
+```{r}
+helper_func_plot_kde_list(kde_list_battles)
+```
+:::
+
+### KDE Insights
+
+Based on the above KDE layers, it shows that there is always a concentration in each plot of heatmap that starts of in Sagaing state of Myanmar then it radiates to other states, and Q3 of year 2023 has the highest intensity in the map.
+
+## 2nd-order spatial point patterns analysis
+
+Next, we will conduct our 2nd-order spatial point patterns analysis. But the computation levels and requirements will increase significantly. Hence, they are more appropriate for local view such as at the state level.
+
+In that case, let us find which state has the most number of occurrences in the acled_sf variable.
+
+```{r}
+summary <- acled_sf %>%
+  group_by(admin1) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+summary
+```
+
+Based on the summary data above, Sagaing has the most number of counts in the entire acled_sf data. So let us filter down the data to related to Sagaing.
+
+Helper functions Filter by state
+
+```{r}
+COUNTRY_STATE <- "Sagaing"
+
+get_quarter_data_by_state <- function(data, state_arg, event_type_arg) {
+  # Filter the data based on the specified event_type
+  filtered_data <- data %>%
+    group_by(admin1) %>%
+    filter(
+      (admin1 == state_arg) &
+      (event_type == event_type_arg)
+    ) %>%
+    select(Quarter_num)
+  
+  # Return the filtered data
+  return(filtered_data)
+}
+
+populate_quarter_data_by_state <- function(event_type, data_list_name, years, quarters, country_state) {
+  # Initialize an empty list to store the results
+  event_data_list <- list()
+  
+  # Loop over the years and quarters to populate the list
+  for (year in years) {
+    for (quarter in quarters) {
+      if (year == 2024 && quarter > 2) next  # Skip quarters beyond Q2 for 2024
+      
+      # Construct the variable name dynamically
+      var_name <- paste0(year, "_q", quarter)
+      data_var_name <- paste0("acled_sf_", year, "_q", quarter)
+      
+      # Get the event type data and store it in the list
+      event_data_list[[var_name]] <- get_quarter_data_by_state(
+        get(data_var_name),
+        country_state,
+        event_type
+      )
+    }
+  }
+  
+  # Assign the populated list to the specified list name
+  assign(data_list_name, event_data_list, envir = .GlobalEnv)
+}
+```
+
+Now let us generate a list of data for each event types in Sagaing.
+
+::: panel-tabset
+### Violence Against Civilians
+
+```{r}
+populate_quarter_data_by_state(
+  event_types["VIOLENCE_CIVILIANS"], 
+  "violence_civilians_state_sf",
+  CONST_YEARS, 
+  CONST_QUARTERS, 
+  COUNTRY_STATE
+)
+```
+
+### Explosions/Remote Violence
+
+```{r}
+populate_quarter_data_by_state(
+  event_types["EXPLOSIONS_REMOTE_VIOLENCE"], 
+  "explosions_remote_violence_state_sf",
+  CONST_YEARS, 
+  CONST_QUARTERS, 
+  COUNTRY_STATE
+)
+```
+
+### Strategic Developments
+
+```{r}
+populate_quarter_data_by_state(
+  event_types["STRAT_DEVS"], 
+  "strat_devs_state_sf",
+  CONST_YEARS, 
+  CONST_QUARTERS, 
+  COUNTRY_STATE
+)
+```
+
+### Battles
+
+```{r}
+populate_quarter_data_by_state(
+  event_types["BATTLES"], 
+  "battles_state_sf",
+  CONST_YEARS, 
+  CONST_QUARTERS, 
+  COUNTRY_STATE
+)
+```
+:::
+
+### Convert to PPP from sf
+
+Before we can perform our 2nd Order spacial point patterns analysis, we'll need to convert our sf data of Sagaing into ppp format.
+
+```{r}
+convert_to_ppp("violence_civilians_state_ppp", violence_civilians_state_sf, CONST_YEARS, CONST_QUARTERS)
+convert_to_ppp("explosions_remote_violence_state_ppp", explosions_remote_violence_state_sf, CONST_YEARS, CONST_QUARTERS)
+convert_to_ppp("strat_devs_state_ppp", strat_devs_state_sf, CONST_YEARS, CONST_QUARTERS)
+convert_to_ppp("battles_state_ppp", battles_state_sf, CONST_YEARS, CONST_QUARTERS)
+```
+
+```{r}
+class(violence_civilians_state_ppp[["2021_q1"]])
+```
+
+### Removing duplicated ppp points
+
+We also need to remove any possible duplicates in the list of data.
+
+```{r}
+any(duplicated(violence_civilians_state_ppp[["2021_q1"]]))
+any(duplicated(violence_civilians_state_ppp[["2021_q2"]]))
+any(duplicated(violence_civilians_state_ppp[["2021_q3"]]))
+any(duplicated(violence_civilians_state_ppp[["2021_q4"]]))
+
+any(duplicated(violence_civilians_state_ppp[["2022_q1"]]))
+any(duplicated(violence_civilians_state_ppp[["2022_q2"]]))
+any(duplicated(violence_civilians_state_ppp[["2022_q3"]]))
+any(duplicated(violence_civilians_state_ppp[["2022_q4"]]))
+
+any(duplicated(violence_civilians_state_ppp[["2023_q1"]]))
+any(duplicated(violence_civilians_state_ppp[["2023_q2"]]))
+any(duplicated(violence_civilians_state_ppp[["2023_q3"]]))
+any(duplicated(violence_civilians_state_ppp[["2023_q4"]]))
+
+any(duplicated(violence_civilians_state_ppp[["2024_q1"]]))
+any(duplicated(violence_civilians_state_ppp[["2024_q2"]]))
+```
+
+```{r}
+remove_duplicates("violence_civilians_state_ppp", violence_civilians_ppp, CONST_YEARS, CONST_QUARTERS)
+remove_duplicates("explosions_remote_violence_state_ppp", explosions_remote_violence_ppp, CONST_YEARS, CONST_QUARTERS)
+remove_duplicates("strat_devs_state_ppp", strat_devs_ppp, CONST_YEARS, CONST_QUARTERS)
+remove_duplicates("battles_state_ppp", battles_ppp, CONST_YEARS, CONST_QUARTERS)
+```
+
+Now we also need to make sure of unit of measurement is in kilometres too.
+
+```{r}
+rescale_to_km("violence_civilians_state_ppp_km", violence_civilians_state_ppp, CONST_YEARS, CONST_QUARTERS)
+rescale_to_km("explosions_remote_violence_state_ppp_km", explosions_remote_violence_state_ppp, CONST_YEARS, CONST_QUARTERS)
+rescale_to_km("strat_devs_state_ppp_km", strat_devs_state_ppp, CONST_YEARS, CONST_QUARTERS)
+rescale_to_km("battles_state_ppp_km", battles_state_ppp, CONST_YEARS, CONST_QUARTERS)
+```
+
+```{r}
+violence_civilians_state_ppp_km[["2021_q1"]]
+```
+
+### Analysing Spatial Point Process Using F function
+
+The F function estimates the empty space function F(r) or its hazard rate h(r) from a point pattern in a window of arbitrary shape.
+
+We will compute F-function estimation by using Fest() of spatstat package, and also perform monte carlo simulation test using envelope() of spatstat package.
+
+#### Helper functions
+
+```{r}
+compute_2nd_order_spa <- function(Fest, data_list_name, ppp_list, years, quarters) {
+  # Initialize an empty list to store the results
+  event_data_list <- list()
+  
+  # Loop over the years and quarters to populate the list
+  for (year in years) {
+    for (quarter in quarters) {
+      if (year == 2024 && quarter > 2) next  # Skip quarters beyond Q2 for 2024
+      
+      # Construct the variable name dynamically
+      var_name <- paste0(year, "_q", quarter)
+      
+      # Get the event type data and store it in the list
+      event_data_list[[var_name]] = Fest(ppp_list[[var_name]])
+    }
+  }
+  
+  # Assign the populated list to the specified list name
+  assign(data_list_name, event_data_list, envir = .GlobalEnv)
+}
+
+envelope_2nd_order_spa <- function(Fest, data_list_name, ppp_list, years, quarters) {
+  # Initialize an empty list to store the results
+  event_data_list <- list()
+  
+  # Loop over the years and quarters to populate the list
+  for (year in years) {
+    for (quarter in quarters) {
+      if (year == 2024 && quarter > 2) next  # Skip quarters beyond Q2 for 2024
+      
+      # Construct the variable name dynamically
+      var_name <- paste0(year, "_q", quarter)
+      
+      # Get the event type data and store it in the list
+      event_data_list[[var_name]] <- envelope(ppp_list[[var_name]], Fest, nsim = 40)
+    }
+  }
+  
+  # Assign the populated list to the specified list name
+  assign(data_list_name, event_data_list, envir = .GlobalEnv)
+}
+```
+
+::: panel-tabset
+### Violence Against Civilians
+
+```{r}
+compute_2nd_order_spa(
+  Fest, 
+  "F_violence_civilians_state_ppp_km", 
+  violence_civilians_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+
+envelope_2nd_order_spa(
+  Fest, 
+  "F_violence_civilians_state_ppp_km_csr", 
+  violence_civilians_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+
+### Explosions/Remote Violence
+
+```{r}
+compute_2nd_order_spa(
+  Fest, 
+  "F_explosions_remote_violence_state_ppp_km", 
+  explosions_remote_violence_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+
+envelope_2nd_order_spa(
+  Fest, 
+  "F_explosions_remote_violence_state_ppp_km_csr", 
+  explosions_remote_violence_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+
+### Strategic Developments
+
+```{r}
+compute_2nd_order_spa(
+  Fest, 
+  "F_strat_devs_state_ppp_km", 
+  strat_devs_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+
+envelope_2nd_order_spa(
+  Fest, 
+  "F_strat_devs_state_ppp_km_csr", 
+  strat_devs_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+
+### Battles
+
+```{r}
+compute_2nd_order_spa(
+  Fest, 
+  "F_battles_state_ppp_km", 
+  battles_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+
+envelope_2nd_order_spa(
+  Fest, 
+  "F_battles_state_ppp_km_csr", 
+  battles_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+ )
+```
+:::
+
+### Plotting the data
+
+Helper function to plot the list of CSR data
+
+```{r}
+helper_func_plot_csr_list <- function(kde_list) {
+  for (name in names(kde_list)) {
+    plot(kde_list[[name]], main = name)
+  }
+}
+```
+
+::: panel-tabset
+### Violence Against Civilians
+
+```{r}
+helper_func_plot_csr_list(F_violence_civilians_state_ppp_km_csr)
+```
+
+### Explosions/Remote Violence
+
+```{r}
+helper_func_plot_csr_list(F_explosions_remote_violence_state_ppp_km_csr)
+```
+
+### Strategic Developments
+
+```{r}
+helper_func_plot_csr_list(F_strat_devs_state_ppp_km_csr)
+```
+
+### Battles
+
+```{r}
+helper_func_plot_csr_list(F_battles_state_ppp_km_csr)
+```
+:::
+
+### G Function
+
+The G function measures the distribution of the distances from an arbitrary event to its nearest event.
+
+We will compute G-function estimation by using Gest() of spatstat package and perform monte carlo simulation test using envelope() of spatstat package.
+
+::: panel-tabset
+### Violence Against Civilians
+
+```{r}
+compute_2nd_order_spa(
+  Gest, 
+  "G_violence_civilians_state_ppp_km", 
+  violence_civilians_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+
+envelope_2nd_order_spa(
+  Gest, 
+  "G_violence_civilians_state_ppp_km_csr", 
+  violence_civilians_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+
+### Explosions/Remote Violence
+
+```{r}
+compute_2nd_order_spa(
+  Gest, 
+  "G_explosions_remote_violence_state_ppp_km", 
+  explosions_remote_violence_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+
+envelope_2nd_order_spa(
+  Gest, 
+  "G_explosions_remote_violence_state_ppp_km_csr", 
+  explosions_remote_violence_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+
+### Strategic Developments
+
+```{r}
+compute_2nd_order_spa(
+  Gest, 
+  "G_strat_devs_state_ppp_km", 
+  strat_devs_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+
+envelope_2nd_order_spa(
+  Gest, 
+  "G_strat_devs_state_ppp_km_csr", 
+  strat_devs_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+```
+
+### Battles
+
+```{r}
+compute_2nd_order_spa(
+  Gest, 
+  "G_battles_state_ppp_km", 
+  battles_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+)
+
+envelope_2nd_order_spa(
+  Gest, 
+  "G_battles_state_ppp_km_csr", 
+  battles_state_ppp_km, 
+  CONST_YEARS, 
+  CONST_QUARTERS
+ )
+```
+:::
+
+::: panel-tabset
+### Violence Against Civilians
+
+```{r}
+helper_func_plot_csr_list(G_violence_civilians_state_ppp_km_csr)
+```
+
+### Explosions/Remote Violence
+
+```{r}
+helper_func_plot_csr_list(G_explosions_remote_violence_state_ppp_km_csr)
+```
+
+### Strategic Developments
+
+```{r}
+helper_func_plot_csr_list(G_strat_devs_state_ppp_km_csr)
+```
+
+### Battles
+
+```{r}
+helper_func_plot_csr_list(G_battles_state_ppp_km_csr)
+```
+:::
+
+### 2nd-Order Spacial Point Patterns Analysis Insights
+
+Based on the above plots of F and G functions, there is a clustering of points in the dataset. This means that the points are closer to each other that what would be expected under a random distribution.
+
+### Spatio-temporal KDE layers for Event Types
+
+A spatio-temporal point process (also called space-time or spatial-temporal point process) is a random collection of points, where each point represents the time and location of an event. Examples of events include incidence of disease, sightings or births of a species, or the occurrences of fires, earthquakes, lightning strikes, tsunamis, or volcanic eruptions.
+
+The analysis of spatio-temporal point patterns is becoming increasingly necessary, given the rapid emergence of geographically and temporally indexed data in a wide range of fields. Several spatio-temporal point patterns analysis methods have been introduced and implemented in R in the last ten years.
+
+#### Helper function for computing spatial-temporal KDE
+
+```{r}
+plot_stkde <- function(acled_sf, year_arg, event_type_arg, mpsz_adm1_owin, plot_title_arg) {
+  # Filter and prepare the data
+  event_type_quarters_combined <- acled_sf %>% 
+    filter(year == year_arg & event_type == event_type_arg) %>%
+    select(Quarter_num) %>%
+    as.ppp()
+  
+  # Create a point pattern and apply jitter
+  event_type_quarters_combined_ppp <- rjitter(as.ppp(event_type_quarters_combined), retry=TRUE, nsim=1, drop=TRUE)
+    
+  # Mask the point pattern with the window
+  event_type_quarters_combined_ppp_owin <- event_type_quarters_combined_ppp[mpsz_adm1_owin]
+  
+  # Calculate the space-time kernel density estimate
+  stkde_event_type_data <- spattemp.density(event_type_quarters_combined_ppp_owin)
+  
+  # Print summary
+  print(summary(stkde_event_type_data))
+  
+  # Plot the results
+  # par(mfcol=c(2, 3))
+  tims <- c(1, 2, 3, 4)
+  for (i in tims) { 
+    if (year_arg == 2024 && i > 2) next
+    plot(stkde_event_type_data, i, 
+         override.par=FALSE, 
+         fix.range=TRUE, 
+         main=paste(plot_title_arg, year_arg, "Q", i))
+  }
+}
+```
+
+::: panel-tabset
+### Violence Against Civilians
+
+### Violence Against Civilians in Year 2021
+
+```{r, fig.width = 18}
+plot_stkde(
+  acled_sf_2021, 
+  2021, 
+  event_types["VIOLENCE_CIVILIANS"], 
+  mpsz_adm1_owin, 
+  "STKDE on Violence Against Civilians in"
+)
+```
+
+### Violence Against Civilians in Year 2022
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2022, 2022, event_types["VIOLENCE_CIVILIANS"], mpsz_adm1_owin, "STKDE on Violence Against Civilians in")
+```
+
+### Violence Against Civilians in Year 2023
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2023, 2023, event_types["VIOLENCE_CIVILIANS"], mpsz_adm1_owin, "STKDE on Violence Against Civilians in")
+```
+
+### Violence Against Civilians in Year 2024
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2024, 2024, event_types["VIOLENCE_CIVILIANS"], mpsz_adm1_owin, "STKDE on Violence Against Civilians in")
+```
+
+### Explosion & Remote Violence
+
+Explosion and Remove Violence in Year 2021
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2021, 2021, event_types["EXPLOSIONS_REMOTE_VIOLENCE"], mpsz_adm1_owin, "STKDE on Explosion & Remote Violence in")
+```
+
+Explosion & Remote Violence in Year 2022
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2022, 2022, event_types["EXPLOSIONS_REMOTE_VIOLENCE"], mpsz_adm1_owin, "STKDE on Explosion & Remote Violence in")
+```
+
+Explosion and Remove Violence in Year 2023
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2023, 2023, event_types["EXPLOSIONS_REMOTE_VIOLENCE"], mpsz_adm1_owin, "STKDE on Explosion & Remote Violence in")
+```
+
+Explosion and Remove Violence in Year 2024
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2024, 2024, event_types["EXPLOSIONS_REMOTE_VIOLENCE"], mpsz_adm1_owin, "STKDE on Explosion & Remote Violence in")
+```
+
+### Strategic Developments
+
+Strategic Developments in Year 2021
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2021, 2021, event_types["STRAT_DEVS"], mpsz_adm1_owin, "STKDE on Strategic Developments in")
+```
+
+Strategic Developments in Year 2022
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2022, 2022, event_types["STRAT_DEVS"], mpsz_adm1_owin, "STKDE on Strategic Developments in")
+```
+
+Strategic Developments in Year 2023
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2023, 2023, event_types["STRAT_DEVS"], mpsz_adm1_owin, "STKDE on Strategic Developments in")
+```
+
+Strategic Developments in Year 2024
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2024, 2024, event_types["STRAT_DEVS"], mpsz_adm1_owin, "STKDE on Strategic Developments in")
+```
+
+### Battles
+
+Battles in Year 2021
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2021, 2021, event_types["BATTLES"], mpsz_adm1_owin, "STKDE on Battles in")
+```
+
+Battles in Year 2022
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2022, 2022, event_types["BATTLES"], mpsz_adm1_owin, "STKDE on Battles in")
+```
+
+Battles in Year 2023
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2023, 2023, event_types["BATTLES"], mpsz_adm1_owin, "STKDE on Battles in")
+```
+
+Battles in Year 2024
+
+```{r, fig.width = 18}
+plot_stkde(acled_sf_2024, 2024, event_types["BATTLES"], mpsz_adm1_owin, "STKDE on Battles in")
+```
+:::
+
+## Conclusions
+
+The ACLED Myanmar dataset definitely holds some interesting insights on how the intensity of each event spreads across to various regions of the country, indicating which state has the most active conflicts going on while allowing us to know which part of Myanmar travelers should steer clear of for their safety.
+
+## Personal Learnings
+
+I would have to admit that this exercise has been really challenging and could also be very time-consuming as well due to the speed performance limitations of my computer. Despite all of that, it has also challenged me to find ways to handle an extremely large data set for the first time, making sure that I should plan ahead on what I want to analyse first before writing the code for it.\
+\
+I believe that the remaining take-home exercises would be more manageable after rigorous and technical experience gained from this take-home exercise.

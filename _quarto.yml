@@ -32,6 +32,11 @@ website:
           href: "In-class_Ex/ICE_04/ice_04.html"
         - text: "In-class Exercise 5"
           href: "In-class_Ex/ICE_05/ice_05.html"
+          
+    - text: "Take-home Exercises"
+      menu:
+        - text: "Take-home Exercises 1"
+          href: "Take-home_Ex/takehome_1.html"
 
 format:
   html:
