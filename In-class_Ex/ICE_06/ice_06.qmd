@@ -1,0 +1,197 @@
+---
+title: "In-class Exercise 06"
+author: "Javier Lian"
+---
+
+## Install Packages
+
+```{r}
+pacman::p_load(sf, sfdep, tmap, tidyverse, tmap)
+```
+
+Importing Data
+
+```{r}
+hunan_2012 <- read_csv("data/aspatial/Hunan_2012.csv")
+```
+
+```{r}
+hunan_sf <- st_read(
+  dsn = "data/geospatial",
+  layer = "Hunan"
+)
+hunan_GDPPC <- left_join(hunan_sf, hunan_2012) %>%
+  select(1:4, 7, 15)
+```
+
+### Deriving Queen's contiguity weights: sfdep methods 
+
+```{r}
+wm_q <- hunan_GDPPC %>%
+  mutate(nb = st_contiguity(geometry),
+         wt = st_weights(nb,
+                         style = "W"),
+         .before = 1)
+```
+
+Performing Global Moran's I test
+
+```{r}
+global_moran_test(
+  wm_q$GDPPC,
+  wm_q$nb,
+  wm_q$wt
+)
+```
+
+### Computing Global Moran' I
+
+```{r}
+moranI <- global_moran(
+  wm_q$GDPPC,
+  wm_q$nb,
+  wm_q$wt
+)
+```
+
+### Performing Global Moran's I Permutation test
+
+```{r}
+set.seed(1234)
+```
+
+```{r}
+global_moran_perm(
+  wm_q$GDPPC,
+  wm_q$nb,
+  wm_q$wt,
+  nsim = 99
+)
+```
+
+### Computing local Moran's I
+
+```{r}
+lisa <- wm_q %>%
+  mutate(local_moran = local_moran(
+    GDPPC, nb, wt, nsim = 99
+  ),
+  .before = 1) %>%
+  unnest(local_moran)
+```
+
+-   use p_ii_sim for simulation
+
+-   ii for local_moran
+
+-   mean & median more important
+
+    -   excessive skewness -\> use median column
+
+        -   excessive: if a lot of number that deviates from 0 (negative/positive)
+
+        -   can plot histogram to evaluate
+
+    -   if close to 0 skewness -\> use mean column
+
+Visualising local Moran's I
+
+```{r}
+tmap_mode("plot")
+tm_shape(lisa) +
+  tm_fill("ii") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6, 8)) +
+  tm_layout(
+    main.title = "local Moran's I of GDPPC",
+    main.title.size = 1
+  )
+```
+
+Visualising p-value of local Moran's I and p-value
+
+```{r}
+tmap_mode("plot")
+map1 <- tm_shape(lisa) +
+  tm_fill("ii") +
+  tm_borders(alpha = 0.5) +
+  tm_view(set.zoom.limits = c(6, 8)) +
+  tm_layout(
+    main.title = "local Moran's I of GDPPC",
+    main.title.size = 1
+  )
+
+map2 <- tm_shape(lisa) +
+  tm_fill("p_ii",
+          breaks = c(0, 0.001, 0.01, 0.05, 1),
+          labels = c("0.001", "0.01", "0.05", "Not sig")) +
+  tm_borders(alpha = 0.5) +
+  tm_layout(
+    main.title = "p-value of local Moran's I",
+    main.title.size = 1
+  )
+
+tmap_arrange(map1, map2, ncol = 2)
+```
+
+### Visualising LISA map
+
+```{r}
+lisa_sig <- lisa %>%
+  filter(p_ii < 0.05)
+
+tmap_mode("plot")
+tm_shape(lisa) +
+  tm_polygons() +
+  tm_borders(alpha = 0.5) +
+tm_shape(lisa_sig) +
+  tm_fill("mean") +
+  tm_borders(alpha = 0.5)
+```
+
+-   to create LISA map, need to have the p_ii filter code line
+
+## Hot Spot and Cold Spot Analysis
+
+### Computing local Gi\* statistics
+
+```{r}
+wm_idw <- hunan_GDPPC %>%
+  mutate(
+    nb = st_contiguity(geometry),
+    wts = st_inverse_distance(
+      nb, geometry,
+      scale = 1, alpha = 1
+    ),
+    .before = 1
+  )
+```
+
+```{r}
+HCSA <- wm_idw %>%
+  mutate(local_Gi = local_gstar_perm(
+    GDPPC, nb, wt, nsim = 99
+  ), .before = 1) %>%
+  unnest(local_Gi)
+
+HCSA
+```
+
+### Visualising Gi\*
+
+```{r}
+HCSA_sig <- HCSA %>%
+  filter(p_sim < 0.05)
+
+tmap_mode("plot")
+tm_shape(HCSA) +
+  tm_polygons() +
+  tm_borders(alpha = 0.5) +
+tm_shape(HCSA_sig) +
+  tm_fill("gi_star") +
+  tm_borders(alpha = 0.5)
+```
+
+-   gstat is for hotspot and coldspot
+
+-   LISA for clusters
