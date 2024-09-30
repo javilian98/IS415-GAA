@@ -1,6 +1,8 @@
 ---
 title: "In-class Exercise 06"
 author: "Javier Lian"
+execute:
+  freeze: true
 ---
 
 ## Install Packages
@@ -24,7 +26,7 @@ hunan_GDPPC <- left_join(hunan_sf, hunan_2012) %>%
   select(1:4, 7, 15)
 ```
 
-### Deriving Queen's contiguity weights: sfdep methods 
+### Deriving Queen's contiguity weights: sfdep methods
 
 ```{r}
 wm_q <- hunan_GDPPC %>%
