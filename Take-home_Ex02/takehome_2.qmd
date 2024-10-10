@@ -1,0 +1,547 @@
+---
+title: "Take-home Exercise 2"
+author: "Javier Lian"
+execute: 
+  warning: false
+---
+
+## Overview
+
+Drug abuse is associated with significant negative health, financial and social consequences. Yet, illicit drug consumption remains highly prevalent and continues to be a growing problem worldwide. In 2021, 1 in 17 people aged 15–64 in the world had used a drug in the past 12 months. Notwithstanding population growth, the estimated number of drug users grew from 240 million in 2011 to 296 million in 2021.
+
+The geopolitics of Thailand which is near the [Golden Triangle](https://en.wikipedia.org/wiki/Golden_Triangle_(Southeast_Asia)) of Indochina, the largest drug production site in Asia, and the constant transportation infrastructure development made Thailand became market and transit routes for drug trafficking to the third countries.
+
+In Thailand, drug abuse is one of the major social issue. There are about 2.7 million youths using drugs in Thailand. Among youths aged between 15 and 19 years, there are about 300,000 who have needs for drug treatment. Most of Thai youths involved with drugs are vocational-school students, which nearly doubles in number compared to secondary-school students.
+
+## Objectives
+
+To discover:
+
+-   if the key indicators of drug abuse of Thailand are independent from space.
+
+-   If the indicators of drug abuse is indeed spatial dependent, then, you would like to detect where are the clusters and outliers, and the hotspots.
+
+-   Last but not least, you are also interested to investigate how the observation above evolve over time.
+
+## Tasks
+
+The specific tasks of this take-home exercise are as follows:
+
+-   Using appropriate function of **sf** and **tidyverse**, preparing the following geospatial data layer:
+
+    -   a study area layer in sf polygon features. It must be at [province level](https://en.wikipedia.org/wiki/Provinces_of_Thailand) (including Bangkok) of Thailand.
+
+    -   a drug abuse indicators layer within the study area in sf polygon features.
+
+-   Using the extracted data, perform global spatial autocorrelation analysis by using [sfdep methods](https://is415-gaa-tskam.netlify.app/in-class_ex/in-class_ex05/in-class_ex05-glsa).
+
+-   Using the extracted data, perform local spatial autocorrelation analysis by using [sfdep methods](https://r4gdsa.netlify.app/chap10.html).
+
+-   Describe the spatial patterns revealed by the analysis above.
+
+## The Data
+
+For the purpose of this take-home exercise, two data sets shall be used, they are:
+
+-   [Thailand Drug Offenses \[2017-2022\]](https://www.kaggle.com/datasets/thaweewatboy/thailand-drug-offenses-2017-2022) at Kaggle.
+
+-   [Thailand - Subnational Administrative Boundaries](https://data.humdata.org/dataset/cod-ab-tha?) at HDX. You are required to use the province boundary data set.
+
+## Installing the Dependencies
+
+Loading the required packages
+
+1.  **sf** Needed to handle spatial data through the new simple features standard
+
+2.  **tmap** Create thematic maps, particularly chloropleth maps in our case
+
+3.  **tidyverse** For easy data manipulation and some visualisation
+
+4.  **ggplot2** A step above the usual visualisations, like histograms
+
+5.  **sfdep** Spatial dependence with spatial features, the highlight of this take home exercise. The spacetime object is particularly useful
+
+```{r}
+pacman::p_load(sf, tmap, tidyverse, ggplot2, sfdep)
+```
+
+## Importing the Datasets
+
+Importing the **tha_admbnda_adm1_rtsd_20220121** dataset as variable **thbd**, which contains polygons representing the borders of the provinces of Thailand.
+
+```{r}
+thbd <- st_read(
+  dsn = "data/geospatial",
+  layer = "tha_admbnda_adm1_rtsd_20220121"
+)
+```
+
+Importing the **thai_drug_offenses_2017_2022** aspatial dataset as **thdo**. This dataset contains points, representing drug cases.
+
+```{r}
+thdo <- read_csv("data/aspatial/thai_drug_offenses_2017_2022.csv")
+```
+
+### **Setting random seed**
+
+It is always a good practice to use `set.seed()` before performing simulation. This is to ensure that the computation is reproducible.
+
+```{r}
+set.seed(111)
+```
+
+## Data Wrangling
+
+### Removing unused columns
+
+For **thbd** (Thai boundary data), I decided to select 4 columns (**Shape_Length**, **Shape_Area**, **ADM1_EN** and **geometry**) which I think are the most useful from the dataset.
+
+And for **thdo** (Thai drug offences), I decided to remove **province_th** column as it might not be helpful if you cannot read Thai scripts.
+
+```{r}
+thbd <- thbd %>%
+  select(1:3, 17)
+
+thdo <- thdo %>%
+  select(-province_th)
+```
+
+### Replacing column values
+
+When analysing both datasets, I noticed that in the **thbd** dataset, the province names 'Bueng Kan' and 'Lop Buri' are correct. However, those names were misspelled as 'buogkan' and 'Loburi' in the **thdo** dataset. So we have to fix that using **mutate()** and **recode()** methods!
+
+```{r}
+thdo <- thdo %>%
+  mutate(
+    province_en = recode(province_en, 
+                         "buogkan" = "Bueng Kan",
+                         "Loburi" = "Lop Buri")
+  )
+```
+
+### Focusing on specific drug offenses
+
+Firstly, let us find out how many types of drug offenses are there in the aspatial thdo dataset.
+
+```{r}
+# Get distinct type_of_drug_offenses
+thdo_offenses_types <- thdo %>%
+  distinct(types_of_drug_offenses)
+
+thdo_offenses_types
+```
+
+Below is the code for finding the number of non-zero cases per year:
+
+```{r}
+thdo_year_no_cases_summary <- thdo %>%
+  filter(no_cases > 0) %>%              # Filter for non-zero no_cases
+  group_by(fiscal_year) %>%             # Group by year
+  summarise(non_zero_count = n()) %>%   # Count non-zero cases per year
+  arrange(desc(non_zero_count))         # Arrange in descending order
+```
+
+```{r}
+print(thdo_year_no_cases_summary)
+```
+
+
+I will be focusing on the most recent year which is year 2022. So let's filter the thdo to year 2022.
+
+```{r}
+thdo <- thdo %>% filter(fiscal_year == 2022)
+```
+
+Suspected cases may not be 100% actual cases that happened, so I am going to remove all suspected cases.
+
+```{r}
+thdo <- thdo %>% filter(!grepl("suspects_", types_of_drug_offenses))
+```
+
+Since the main analysis of this assignment is focusing on drug abuse, I am going to filter the data related to that offense.
+
+```{r}
+thdo <- thdo %>% filter(types_of_drug_offenses == "drug_use_cases")
+```
+
+### Joining Datasets
+
+In this section, I would like to join the row data of each province from thbd with thdo.
+
+When I tried running the left_join command initially, the output (image below) recommended to me to perform a cross_join, which outputs over 57,000 rows of data from the initial 7,000+ rows of data.
+
+And In order to perform a left join, there needs to be identical column name and values between the two datasets (thbd and thdo). The two datasets have same province values but different column names (in this case, **ADM1_EN** and **province_en** from thbd and thdo respectively).
+
+![](images/clipboard-1452144158.png)
+
+#### Renaming column values
+
+My solution may not be ideal but if I change the column name from one dataset to match with the other dataset, then it would solve the issue.
+
+In this case, let's change the column name **ADM1_EN** from thbd to **province_en** from thdo.
+
+```{r}
+thbd = rename(thbd, province_en = ADM1_EN)
+```
+
+Let's take a look at the output to see if the column name has been changed.
+
+```{r}
+colnames(thbd)
+```
+
+Indeed it has been changed. Nice!
+
+#### Performing the left join
+
+```{r}
+thbddo <- left_join(thbd, thdo, by = join_by(province_en))
+```
+
+## Global Measures of Spatial Autocorrelation
+
+In this section, I will be performing spatial complete randomness test for global spatial autocorrelation.
+
+Before I can compute the global spatial autocorrelation statistics, I'll need to construct a spatial weights of the study area. The spatial weights is used to define the neighbourhood relationships between the geographical units (i.e. province) in the study area.
+
+### Deriving Queen's contiguity weights
+
+When I tried to compute the Queen's contiguity weights, I received an error in RStudio mentioning "cannot allocate vector of size 7.9 Gb". Unfortunately, my solution for it is to scale down to a year's worth of data.
+
+![](images/clipboard-2802561826.png)
+
+When using the **st_contiguity()** method, I encountered an error mentioning some data has empty neighbours. I could either remove it entirely but this would affect the number of provinces and might skew the overall analysis, or the more optimal way is to create a buffer (learnt from the previous hands-on exercise) to connect features in the data.
+
+```{r}
+# Create a buffer to connect features
+buffered_geometries <- st_buffer(thbddo$geometry, dist = 100)  # Adjust distance as needed
+
+# Recalculate neighbors using buffered geometries
+nb_buffered <- st_contiguity(buffered_geometries)
+
+# Create weights with the buffered neighbors
+thbddo_q <- thbddo %>%
+  mutate(nb = nb_buffered,
+         wt = st_weights(nb_buffered, style = "W"),
+         .before = 1)
+```
+
+Now I can successfully compute the queen.
+
+```{r}
+thbddo_q
+```
+
+### Global Moran's I Test
+
+In this section, I use Moran’s I Test to understand the presence of systemic spatial variations of drug abuse cases. In other words, how the number of drug abuse cases in each province varies according to its surrounding provinces compared to that under spatial randomness.
+
+```{r}
+global_moran_test(thbddo_q$no_cases,
+            thbddo_q$nb,
+            thbddo_q$wt)
+```
+
+### Performing Global Moran's I Permutation Test
+
+In practice, Monte carlo simulation should be used to perform the statistical test. For **sfdep**, it is supported by `global_moran_perm()`
+
+```{r}
+thbddo_q_mc_res <- global_moran_perm(thbddo_q$no_cases,
+           thbddo_q$nb,
+           thbddo_q$wt,
+           nsim = 999,
+           zero.policy = TRUE, 
+           na.action=na.omit)
+
+thbddo_q_mc_res
+```
+
+The results from summary indicate that the simulated values of Global Moran's I vary from negative to positive, with a slight skew towards negative values. If the observed Global Moran's I value is significantly greater than the maximum of this distribution, it suggests strong positive spatial autocorrelation in your data. Conversely, if it falls below the minimum, it indicates strong negative autocorrelation.\
+\
+The observed Moran's I statistic (0.21623) is significantly higher than most of the simulated values, as indicated by the p-value of 0.004. This suggests a strong positive spatial autocorrelation in drug abuse cases in Thailand for the year 2022, meaning provinces with high drug abuse cases are likely to be near other provinces with high drug abuse cases.
+
+```{r}
+    summary(thbddo_q_mc_res$res[1:999])
+```
+
+```{r}
+var(thbddo_q_mc_res$res[1:999])
+```
+
+To visualise the monte-carlo simulation results, we plot a histogram. Our observed result was 0.21623, which falls slightly outside the results generated from our simulation. As such, we can deem the results to be less than likely to be due to chance and that there is a significant degree of spatial autocorrelation in the number of drug abuse cases per province.
+
+```{r}
+ggplot() + 
+  aes(thbddo_q_mc_res$res[1:999]) + 
+  geom_histogram(colour="black", fill="pink") + 
+  labs(title = "Histogram of Simulated Moran's I For Drug Abuse Cases Year 2022",
+       x = "Simulated Moran's I",
+       y = "Occurences") +
+  theme_minimal()
+
+```
+
+## Local Measures of Spatial Autocorrelation
+
+Local Indicators of Spatial Association (LISA) help us identify clusters among different regions. In simpler terms, LISA is a statistical method that shows how much a region is affected by its neighboring areas, with higher values indicating a stronger influence from the surroundings.
+
+### Local Moran's I
+
+```{r}
+lisa <- thbddo_q %>% 
+  mutate(local_moran = local_moran(
+    no_cases, nb, wt, nsim = 99),
+         .before = 1) %>%
+  unnest(local_moran)
+```
+
+```{r}
+lisa
+```
+
+The output of `local_moran()` is a sf data.frame containing the columns `ii`, `eii`, `var_ii`, `z_ii`, `p_ii`, `p_ii_sim`.
+
+-   `ii`: local moran statistic
+
+-   `eii`: expectation of local moran statistic; for localmoran_permthe permutation sample means
+
+-   `var_ii`: variance of local moran statistic; for localmoran_permthe permutation sample standard deviations
+
+-   `z_ii`: standard deviate of local moran statistic; for localmoran_perm based on permutation sample means and standard deviations
+
+-   `p_ii`: p-value of local moran statistic using pnorm(); for localmoran_perm using standard deviatse based on permutation sample means and standard deviations
+
+#### Visualising Local Moran’s I
+
+```{r, fig.width=12, fig.height=10}
+tm_shape(lisa) +
+  tm_fill("ii",
+          palette = c("#b7dce9","#e1ecbb","#f5f3a6",
+                      "#ec9a64","#d21b1c"),
+          title = "Local Moran's I",
+          midpoint = NA,
+          legend.hist = TRUE, 
+          legend.is.portrait = TRUE,
+          legend.hist.z = 0.1) +
+  tm_layout(main.title = "Spatial Autocorrelation\n of Drug Abuse Cases in Year 2022 Thailand",
+            main.title.position = "center",
+            main.title.size = 1.3,
+            main.title.fontface = "bold",
+            legend.title.size = 1,
+            legend.text.size = 1,
+            frame = TRUE) +
+  tm_borders(col = "black", alpha = 0.6) +
+  tm_compass(type="8star", text.size = 1.5, size = 3, position=c("RIGHT", "TOP"))
+```
+
+#### Visualising Local Moran's I p-value
+
+```{r, fig.width=18, fig.height=15}
+tm_shape(lisa)+
+  tm_fill("p_ii", 
+          palette = c("#b7dce9","#c9e3d2","#f5f3a6","#ec9a64","#d21b1c"),
+          ) +
+  tm_borders(col = "black", alpha = 0.6)+
+  tm_layout(main.title = "Statistical Significance of Spatial Autocorrelation\n of Drug Abuse Cases in Year 2022 Thailand",
+            main.title.position = "center",
+            main.title.size = 1.5,
+            main.title.fontface = "bold",
+            legend.title.size = 1,
+            legend.text.size = 1,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5) +
+  tm_compass(type="8star", text.size = 1.5, size = 3, position=c("RIGHT", "TOP")) +
+  tm_scale_bar(position=c("LEFT", "BOTTOM"), text.size=1.2) +
+  tm_grid(labels.size = 1,alpha =0.2)
+```
+
+#### Visualising Statistically Significant Local Spatial Autocorrelation Map
+
+```{r, fig.width=18, fig.height=15}
+lisa_sig <- lisa  %>%
+  filter(p_ii_sim < 0.05)
+
+tm_shape(lisa)+
+  tm_polygons() +
+  tm_borders(col = "black", alpha = 0.6)+
+tm_shape(lisa_sig)+
+  tm_fill("ii", 
+          palette = c("#b7dce9","#e1ecbb","#f5f3a6",
+                      "#f8d887","#ec9a64","#d21b1c"),
+          title = "Local Moran's I (p < 0.05)",
+          midpoint = NA,
+          legend.hist = TRUE, 
+          legend.is.portrait = TRUE,
+          legend.hist.z = 0.1) +
+  tm_borders(col = "black", alpha = 0.6)+
+  tm_layout(main.title = "Statistically Significant Province-Level Spatial Autocorrelation Map \n of Drug Abuse Cases in Thailand 2022",
+            main.title.position = "center",
+            main.title.size = 1.5,
+            main.title.fontface = "bold",
+            legend.title.size = 1,
+            legend.text.size = 1,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5) +
+  tm_compass(type="8star", text.size = 1.5, size = 3, position=c("RIGHT", "TOP")) +
+  tm_scale_bar(position=c("LEFT", "BOTTOM"), text.size=1.2) +
+  tm_grid(labels.size = 1,alpha =0.2)
+```
+
+### LISA Classification
+
+The local indicator of spatial association (LISA) for each observation gives an indication of the extent of significant spatial clustering of similar values around that observation. In general, the analysis will calculate a local statistic value, a z-score, a pseudo p-value, and a code representing the cluster type for each statistically significant feature. LISA map is a categorical map showing type of outliers and clusters. There are two types of outliers namely: **High-Low** and **Low-High** outliers. Likewise, there are two type of clusters namely: **High-High** and **Low-Low** cluaters.
+
+Specific to our study, we may infer LISA classifications as below.
+
+-   **High-Low Outliers:** Provinces with a high value of drug abuse cases, surrounded by neighbouring provinces with low values of drug abuse cases.
+
+-   **Low-High Outliers**: Provinces with a low value of drug abuse cases, surrounded by neighbouring provinces with high values of drug abuse cases.
+
+-   **High-High Clusters**: Provinces with a high value of drug abuse cases, surrounded by neighbouring provinces with high values of drug abuse cases.
+
+-   **Low-Low Clusters**: Provinces with a low value of drug abuse cases, surrounded by neighbouring provinces with low values of drug abuse cases.
+
+#### Visualising Statistically Significant LISA Map for Study Area
+
+In `lisa` sf data.frame we created when calculating local Moran’s Ii , we can find three fields contain the LISA categories. They are `mean`, `median` and `pysal`. We will use `mean` column to visualise LISA classification maps with relevant `tmap` functions.
+
+```{r, fig.width=18, fig.height=15}
+tmap_mode("plot")
+study_area_lisa <- tm_shape(lisa)+
+  tm_polygons() +
+  tm_borders(col = "black", alpha = 0.6)+
+tm_shape(lisa_sig)+
+  tm_fill("mean", 
+          palette = c("#b7dce9","#ec9a64","#e1ecbb", "#d21b1c"),
+          title = "LISA class",
+          midpoint = NA,
+          legend.hist = TRUE, 
+          legend.is.portrait = TRUE,
+          legend.hist.z = 0.1) +
+  tm_borders(col = "black", alpha = 0.6)+
+  tm_layout(main.title = "Province-Level LISA Map of Drug Abuse Cases in Thailand 2022",
+            main.title.position = "center",
+            main.title.size = 1.7,
+            main.title.fontface = "bold",
+            legend.outside = TRUE,
+            legend.outside.position = "right",
+            legend.title.size = 1.8,
+            legend.text.size = 1.3,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5) +
+  tm_compass(type="8star", text.size = 1.5, size = 2, position=c("RIGHT", "TOP")) +
+  tm_scale_bar(position=c("LEFT", "BOTTOM"), text.size=1.2) +
+  tm_grid(labels.size = 1,alpha =0.2)
+
+study_area_lisa
+```
+
+### Hot Spot and Cold Spot Area Analysis
+
+Beside detecting cluster and outliers, localised spatial statistics can be also used to detect hot spot and/or cold spot areas.
+
+The term ‘hot spot’ has been used generically across disciplines to describe a region or value that is higher relative to its surroundings (Lepers et al 2005, Aben et al 2012, Isobe et al 2015).
+
+```{r}
+wm_idw <- thbddo %>%
+  mutate(nb = include_self(st_contiguity(geometry)),
+         wt = st_inverse_distance(nb, geometry,
+                                   scale = 1,
+                                   alpha = 1),
+         .before = 1)
+```
+
+Next, we will calculate local Gi∗ using `local_gstart_perm()` function from **sfdep** package. This function uses a neighbour list `nb` and a weight list `wt` as an input and generate Gi∗ statistics through a Monte Carlo permutation with specified `nsim`. The results will then be stored into a new object called `HCSA`.
+
+```{r}
+HCSA <- wm_idw %>% 
+  mutate(local_Gi_star = local_gstar_perm(
+    no_cases, nb, wt, nsim = 99),
+         .before = 1) %>%
+  unnest(local_Gi_star)
+```
+
+Next, we will use relevant `tmap` functions to visualise the result of local Gi∗ values for our study area. For visualisation purpose, we will create a new column `label` similar to what we did in Local Moran’s I.
+
+```{r, fig.width=18, fig.height=15}
+tmap_mode("plot")  
+tm_shape(HCSA)+
+  tm_fill("gi_star", 
+          palette = c("#57bfc0", "#7977f3","#f8d673","#f8b675","#f67774"),
+          title = "Gi*",
+          midpoint = 0) +
+  tm_borders(col = "black", alpha = 0.6)+
+  tm_layout(main.title = " Hotspots & Coldspots of Drug Abuse Cases in Thailand 2022",
+            main.title.position = "center",
+            main.title.size = 1.5,
+            main.title.fontface = "bold",
+            legend.title.size = 1,
+            legend.text.size = 1,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5) +
+  tm_compass(type="8star", text.size = 1.5, size = 3, position=c("RIGHT", "TOP")) +
+  tm_scale_bar(position=c("LEFT", "BOTTOM"), text.size=1.2) +
+  tm_grid(labels.size = 1,alpha =0.2)
+```
+
+Similar to what we have done for LISA, we will only focus on provinces with statistically significant Local Getis-Ord Gi∗ values. To achieve this, we will filter out all Local Getis-Ord Gi∗ values with a *p-value* \> 0.05. Subsequently, we will use relevant `tmap` functions to create a statistically significant local spatial autocorrelation map for our study area.
+
+```{r, fig.width=18, fig.height=15}
+HCSA_sig <- HCSA  %>%
+  filter(p_sim < 0.05)
+
+tmap_mode("plot")
+tm_shape(HCSA) +
+  tm_polygons() +
+tm_shape(HCSA_sig)+
+  tm_fill("gi_star", 
+          palette = c("#57bfc0", "#7977f3","#f8d673","#f8b675","#f67774"),
+          title = "Gi*",
+          midpoint = 0,
+          legend.hist = TRUE, 
+          legend.is.portrait = TRUE,
+          legend.hist.z = 0.1) +
+  tm_borders(col = "black", alpha = 0.6)+
+  tm_layout(main.title = "Statistically Significant Hotspots & Coldspots \nof Drug Abuse Cases in Thailand 2022",
+            main.title.position = "center",
+            main.title.size = 1.5,
+            main.title.fontface = "bold",
+            legend.title.size = 1,
+            legend.text.size = 1,
+            frame = TRUE) +
+  tm_borders(alpha = 0.5) +
+  tm_compass(type="8star", text.size = 1.5, size = 3, position=c("RIGHT", "TOP")) +
+  tm_scale_bar(position=c("LEFT", "BOTTOM"), text.size=1.2) +
+  tm_grid(labels.size = 1,alpha =0.2)
+```
+
+## Conclusion
+
+This study aimed to analyze drug abuse patterns in Thailand, focusing on the spatial distribution of drug-related offenses across provinces. Utilizing geospatial data and statistical methods, we sought to understand the independence of key indicators of drug abuse from spatial influences, identify clusters and outliers, and examine how these patterns evolve over time.
+
+The Global Moran's I test revealed significant positive spatial autocorrelation in drug abuse cases, indicating that provinces with high or low drug use rates tend to be clustered together rather than randomly distributed. This suggests that local factors—such as socioeconomic conditions, accessibility to treatment, and proximity to drug trafficking routes—play a crucial role in influencing drug abuse patterns.
+
+The LISA analysis identified specific provinces as either hotspots (High-High clusters) or cold spots (Low-Low clusters) for drug abuse. This classification allows for targeted interventions, helping policymakers focus resources where they are most needed.
+
+Notable high-low outliers indicate provinces with high drug abuse cases surrounded by areas with low cases, highlighting potential spillover effects or unique local factors contributing to the issue.
+
+The Getis-Ord Gi\* statistic identified significant hotspots and cold spots, reinforcing the findings from the LISA analysis. This further supports the notion that drug abuse is not uniformly distributed across Thailand, with certain regions experiencing acute challenges that require immediate attention.
+
+While this analysis primarily focused on data from 2022, the methodology allows for ongoing evaluation of trends over time. Future studies could leverage this framework to monitor changes in drug abuse patterns in response to interventions or shifts in policy.
+
+### Recommendations for Future Research:
+
+-   **Broader Data Integration**: Incorporating additional data sources, such as socioeconomic indicators, healthcare access, and law enforcement activities, could provide deeper insights into the factors driving drug abuse in specific regions.
+
+-   **Longitudinal Studies**: Conducting longitudinal studies would help identify trends over time and assess the impact of policy changes on drug abuse patterns.
+
+-   **Qualitative Research**: Engaging in qualitative research to understand community perspectives on drug abuse could enrich quantitative findings and support more effective intervention strategies.
+
+In conclusion, this analysis underscores the importance of spatial considerations in understanding and addressing drug abuse in Thailand. By leveraging geospatial data and analytical methods, stakeholders can develop informed strategies that respond to the unique challenges faced by different provinces.
+
+## Takeaways
+
+I think it is important to do some self-research on the country you are conducting your analysis. With the little details like having incorrect province names and not knowing about it can potentially draw you back in moments of frustration.
+
+After doing this take-home exercise, I believed that I am further equipped with more techniques under my belt to conduct more interesting analysis in the future.

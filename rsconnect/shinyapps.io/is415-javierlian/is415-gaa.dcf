@@ -1,0 +1,10 @@
+name: is415-gaa
+title:
+username: is415-javierlian
+account: is415-javierlian
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12868413
+bundleId:
+url: https://is415-javierlian.shinyapps.io/is415-gaa/
+version: 1
