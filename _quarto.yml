@@ -52,7 +52,7 @@ website:
         - text: "Take-home Exercises 2"
           href: "Take-home_Ex02/takehome_2.html"
         - text: "Take-home Exercises 3"
-          href: "Take-home_Ex02/takehome_3.html"
+          href: "Take-home_Ex03/takehome_3.html"
 
 format:
   html:
