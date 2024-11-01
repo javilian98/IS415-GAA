@@ -145,7 +145,6 @@ thdo_year_no_cases_summary <- thdo %>%
 print(thdo_year_no_cases_summary)
 ```
 
-
 I will be focusing on the most recent year which is year 2022. So let's filter the thdo to year 2022.
 
 ```{r}
@@ -314,16 +313,15 @@ The output of `local_moran()` is a sf data.frame containing the columns `ii`, `e
 
 #### Visualising Local Moran’s I
 
+```{r}
+class(lisa)
+```
+
 ```{r, fig.width=12, fig.height=10}
 tm_shape(lisa) +
   tm_fill("ii",
           palette = c("#b7dce9","#e1ecbb","#f5f3a6",
-                      "#ec9a64","#d21b1c"),
-          title = "Local Moran's I",
-          midpoint = NA,
-          legend.hist = TRUE, 
-          legend.is.portrait = TRUE,
-          legend.hist.z = 0.1) +
+                      "#ec9a64","#d21b1c")) +
   tm_layout(main.title = "Spatial Autocorrelation\n of Drug Abuse Cases in Year 2022 Thailand",
             main.title.position = "center",
             main.title.size = 1.3,
