@@ -152,21 +152,21 @@ populate_col_names("VIETNAM_COL_NAMES", YEARS, VIETNAM_FARMS_TYPES)
 
 ## Data Wrangling
 
-### Splitting dataset into types and years
+### Separating data with each row having province, year & type of farm, and geometry.
 
+This process creates rows of data containing columns: "Cities, provincies", "year and type of farm", "geometry", such that when plotting a map, we don't have to keep selecting those 3 columns every time.
 ```{r}
 # Helper Function
 populate_data_by_col <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
-  # Loop over the years and quarters to populate the list
   for (col_name in columns) {
-    event_data_list[[col_name]] <- data[, c("Cities, provincies", col_name, "geometry")]
+    data_list[[col_name]] <- data[, c("Cities, provincies", col_name, "geometry")]
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 populate_data_by_col("vietnam_farms_data", vietnam_farms, YEARS, VIETNAM_COL_NAMES)
@@ -220,10 +220,10 @@ We will create a helper function compute_and_populate_queens() to compute queen 
 # Helper Function
 compute_and_populate_queens <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in VIETNAM_COL_NAMES) {
-    event_data_list[[col_name]] <- data[[col_name]] %>%
+    data_list[[col_name]] <- data[[col_name]] %>%
       mutate(nb = st_contiguity(geometry),
          wt = st_weights(nb,
                          style = "W"),
@@ -231,7 +231,7 @@ compute_and_populate_queens <- function(new_data_list_name, data, years, columns
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 compute_and_populate_queens("vietnam_farms_q", vietnam_farms_data, YEARS, VIETNAM_COL_NAMES)
@@ -250,16 +250,16 @@ Global Moran's I is a statistical test used to assess spatial autocorrelation in
 ```{r}
 compute_list_of_morans_i_test <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in VIETNAM_COL_NAMES) {
-    event_data_list[[col_name]]<- global_moran_test(data[[col_name]][[col_name]],
+    data_list[[col_name]]<- global_moran_test(data[[col_name]][[col_name]],
             vietnam_farms_q[[col_name]]$nb,
             vietnam_farms_q[[col_name]]$wt)
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 compute_list_of_morans_i_test("vietnam_farms_moran_i_test_res", vietnam_farms_q, YEARS, VIETNAM_COL_NAMES)
@@ -276,10 +276,10 @@ In practice, Monte carlo simulation should be used to perform the statistical te
 ```{r}
 compute_list_of_morans_i_mc_test <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in VIETNAM_COL_NAMES) {
-    event_data_list[[col_name]]<- global_moran_perm(data[[col_name]][[col_name]],
+    data_list[[col_name]]<- global_moran_perm(data[[col_name]][[col_name]],
             vietnam_farms_q[[col_name]]$nb,
             vietnam_farms_q[[col_name]]$wt,
             nsim = 999,
@@ -288,7 +288,7 @@ compute_list_of_morans_i_mc_test <- function(new_data_list_name, data, years, co
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 compute_list_of_morans_i_mc_test("vietnam_farms_moran_i_mc_test_res", vietnam_farms_q, YEARS, VIETNAM_COL_NAMES)
@@ -323,11 +323,11 @@ Local Indicators of Spatial Association (LISA) help us identify clusters among d
 #Helper function
 compute_list_of_lisa <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in columns) {
     
-    event_data_list[[col_name]] <- data[[col_name]] %>% 
+    data_list[[col_name]] <- data[[col_name]] %>% 
       mutate(local_moran = local_moran(
         data[[col_name]][[col_name]], 
         vietnam_farms_q[[col_name]]$nb, 
@@ -337,7 +337,7 @@ compute_list_of_lisa <- function(new_data_list_name, data, years, columns) {
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 compute_list_of_lisa("vietnam_farms_list_lisa", vietnam_farms_q, YEARS, VIETNAM_COL_NAMES)
@@ -357,11 +357,11 @@ vietnam_farms_list_lisa["2012 Cultivation farm"][["2012 Cultivation farm"]]
 
 plot_list_of_lisa <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in columns) {
     
-    event_data_list[[col_name]] <- tm_shape(st_as_sf(data[[col_name]])) +
+    data_list[[col_name]] <- tm_shape(st_as_sf(data[[col_name]])) +
       tm_fill("ii",
               palette = c("#b7dce9","#e1ecbb","#f5f3a6",
                           "#ec9a64","#d21b1c")) +
@@ -377,7 +377,7 @@ plot_list_of_lisa <- function(new_data_list_name, data, years, columns) {
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 plot_list_of_lisa("vietnam_farms_list_lisa_plots", vietnam_farms_list_lisa, YEARS, VIETNAM_COL_NAMES)
@@ -392,11 +392,11 @@ vietnam_farms_list_lisa_plots$`2012 Cultivation farm`
 ```{r}
 plot_list_of_lisa_pii <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in columns) {
     
-    event_data_list[[col_name]] <- tm_shape(st_as_sf(data[[col_name]])) +
+    data_list[[col_name]] <- tm_shape(st_as_sf(data[[col_name]])) +
       tm_fill("p_ii",
               palette = c("#b7dce9","#e1ecbb","#f5f3a6",
                           "#ec9a64","#d21b1c")) +
@@ -412,7 +412,7 @@ plot_list_of_lisa_pii <- function(new_data_list_name, data, years, columns) {
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 plot_list_of_lisa_pii("vietnam_farms_list_lisa_pii_plots", vietnam_farms_list_lisa, YEARS, VIETNAM_COL_NAMES)
@@ -427,11 +427,11 @@ vietnam_farms_list_lisa_pii_plots$`2012 Cultivation farm`
 ```{r, fig.width=6, fig.height=10}
 plot_list_of_lisa_sig <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in columns) {
     
-    event_data_list[[col_name]] <- tm_shape(st_as_sf(data[[col_name]])) +
+    data_list[[col_name]] <- tm_shape(st_as_sf(data[[col_name]])) +
       tm_fill("p_ii",
               palette = c("#b7dce9","#e1ecbb","#f5f3a6",
                           "#ec9a64","#d21b1c")) +
@@ -447,7 +447,7 @@ plot_list_of_lisa_sig <- function(new_data_list_name, data, years, columns) {
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 ```
 
@@ -472,14 +472,14 @@ Specific to our study, we may infer LISA classifications as below.
 tmap_mode("plot")
 plot_list_of_lisa_class <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in columns) {
     lisa <- st_as_sf(data[[col_name]])
     lisa_sig <- lisa  %>%
       filter(p_ii_sim < 0.05)
     
-    event_data_list[[col_name]] <- tm_shape(lisa) +
+    data_list[[col_name]] <- tm_shape(lisa) +
       tm_polygons() +
       tm_borders(col = "black", alpha = 0.6)+
       tm_shape(lisa_sig)+
@@ -507,7 +507,7 @@ plot_list_of_lisa_class <- function(new_data_list_name, data, years, columns) {
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 ```
 
@@ -534,10 +534,10 @@ A hotspot is a region or value that is higher relative to its surroundings
 # helper functions
 compute_and_generate_wm <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in columns) {
-    event_data_list[[col_name]] <- data[[col_name]] %>%
+    data_list[[col_name]] <- data[[col_name]] %>%
       mutate(nb = include_self(st_contiguity(geometry)),
              wt = st_inverse_distance(nb, geometry,
                                        scale = 1,
@@ -546,7 +546,7 @@ compute_and_generate_wm <- function(new_data_list_name, data, years, columns) {
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 compute_and_generate_wm("vietnam_farms_wm", vietnam_farms_data, YEARS, VIETNAM_COL_NAMES)
@@ -558,10 +558,10 @@ Next, we will calculate local Gi∗ using `local_gstart_perm()` function fro
 # helper functions
 compute_and_generate_HCSA <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in columns) {
-    event_data_list[[col_name]] <- data[[col_name]] %>% 
+    data_list[[col_name]] <- data[[col_name]] %>% 
       mutate(local_Gi_star = local_gstar_perm(data[[col_name]][[col_name]], 
                                               nb, 
                                               data[[col_name]]$wt, nsim = 99),
@@ -570,7 +570,7 @@ compute_and_generate_HCSA <- function(new_data_list_name, data, years, columns) 
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 compute_and_generate_HCSA("vietnam_farms_HCSA", vietnam_farms_wm, YEARS, VIETNAM_COL_NAMES)
@@ -590,11 +590,11 @@ tmap_mode("plot")
 # helper functions
 plot_vietnam_farms_HCSA <- function(new_data_list_name, data, years, columns) {
   # Initialize an empty list to store the results
-  event_data_list <- list()
+  data_list <- list()
 
   for (col_name in columns) {
     # Create the map for each column in a separate tm_shape call
-    event_data_list[[col_name]] <- tm_shape(st_as_sf(data[[col_name]])) +
+    data_list[[col_name]] <- tm_shape(st_as_sf(data[[col_name]])) +
       tm_fill("gi_star", 
               palette = c("#57bfc0", "#7977f3","#f8d673","#f8b675","#f67774"),
               title = "Gi*",
@@ -613,7 +613,7 @@ plot_vietnam_farms_HCSA <- function(new_data_list_name, data, years, columns) {
   }
 
   # Assign the populated list to the specified list name
-  assign(new_data_list_name, event_data_list, envir = .GlobalEnv)
+  assign(new_data_list_name, data_list, envir = .GlobalEnv)
 }
 
 plot_vietnam_farms_HCSA("vietnam_farms_HCSA_plots", vietnam_farms_HCSA, YEARS, VIETNAM_COL_NAMES)
