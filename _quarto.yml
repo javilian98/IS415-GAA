@@ -44,6 +44,8 @@ website:
           href: "In-class_Ex/ICE_08/ICE_08.html"
         - text: "In-class Exercise 10"
           href: "In-class_Ex/ICE_10/ice_10.html"
+        - text: "In-class Exercise 11"
+          href: "In-class_Ex/ICE_11/ice_11.qmd"
           
     - text: "Take-home Exercises"
       menu:
